@@ -1,5 +1,5 @@
 """
-Core face recognition functionality.
+Modified version of FaceRecognitionSystem to include anti-spoofing support.
 """
 
 import os
@@ -12,6 +12,7 @@ import face_recognition
 from database.db_manager import DatabaseManager
 from utils.config import Config
 from utils.logger import logger
+from core.anti_spoofing import AntiSpoofingSystem
 
 # Check for GPU availability and configure dlib to use CUDA if available
 try:
@@ -30,7 +31,7 @@ class FaceRecognitionSystem:
     Core face recognition system that handles detection and recognition.
     
     This class provides methods for face detection, recognition, 
-    and processing of face images.
+    and processing of face images, with additional anti-spoofing protection.
     """
     
     def __init__(self, base_dir: str = "data"):
@@ -56,6 +57,10 @@ class FaceRecognitionSystem:
         self.frame_skip = self.config.get("frame_skip", 1)
         self.display_fps = self.config.get("display_fps", True)
         
+        # Initialize anti-spoofing system
+        self.anti_spoofing = AntiSpoofingSystem()
+        self.enable_anti_spoofing = self.config.get("enable_anti_spoofing", True)
+        
         # Derived from database manager
         self.known_face_encodings = self.db_manager.face_encodings
         self.known_face_names = self.db_manager.face_names
@@ -74,6 +79,10 @@ class FaceRecognitionSystem:
         
         # Compute resources
         self.n_cpu_cores = max(1, multiprocessing.cpu_count() - 1)
+        
+        # Buffer for anti-spoofing liveness detection
+        self.frame_buffer = []
+        self.max_frame_buffer = 10  # Keep last 10 frames for liveness detection
         
     def _determine_detection_method(self) -> str:
         """
@@ -164,7 +173,7 @@ class FaceRecognitionSystem:
         
         return batch_encodings, batch_names
     
-    def process_face_recognition_batch(self, batch_frames: List[Tuple[np.ndarray, np.ndarray, float]]) -> List[Tuple[np.ndarray, List[Tuple[int, int, int, int]], List[Tuple[str, int, str]]]]:
+    def process_face_recognition_batch(self, batch_frames: List[Tuple[np.ndarray, np.ndarray, float]]) -> List[Tuple[np.ndarray, List[Tuple[int, int, int, int]], List[Tuple[str, int, str, Dict[str, Any]]]]]:
         """
         Process a batch of frames for face recognition using GPU acceleration.
         
@@ -172,10 +181,29 @@ class FaceRecognitionSystem:
             batch_frames (List[Tuple[np.ndarray, np.ndarray, float]]): List of (frame, rgb_frame, scale_factor) tuples
             
         Returns:
-            List[Tuple[np.ndarray, List[Tuple[int, int, int, int]], List[Tuple[str, int, str]]]]: 
-                List of (frame, face_locations, face_matches) tuples
+            List[Tuple[np.ndarray, List[Tuple[int, int, int, int]], List[Tuple[str, int, str, Dict[str, Any]]]]]: 
+                List of (frame, face_locations, face_matches) tuples with anti-spoofing results
         """
         results = []
+        
+        # Update frame buffer for liveness detection
+        for frame, _, _ in batch_frames:
+            self.frame_buffer.append(frame.copy())
+            # Keep buffer size limited
+            if len(self.frame_buffer) > self.max_frame_buffer:
+                self.frame_buffer.pop(0)
+        
+        # Perform liveness detection if we have enough frames
+        liveness_result = None
+        if len(self.frame_buffer) >= 3 and self.enable_anti_spoofing:
+            is_live, liveness_score, liveness_metadata = self.anti_spoofing.analyze_face_liveness(self.frame_buffer[-3:])
+            if not is_live and liveness_score < 0.3:  # Very low movement
+                logger.warning(f"Potential liveness attack detected: score={liveness_score}")
+                liveness_result = {
+                    "is_live": is_live,
+                    "liveness_score": liveness_score,
+                    "liveness_metadata": liveness_metadata
+                }
         
         for frame, rgb_frame, scale_factor in batch_frames:
             # Detect face locations
@@ -187,13 +215,14 @@ class FaceRecognitionSystem:
                 
                 # Match faces
                 face_matches = []
-                for face_encoding in face_encodings:
+                for i, face_encoding in enumerate(face_encodings):
                     # See if the face is a match for known faces
                     matches = face_recognition.compare_faces(
                         self.known_face_encodings, face_encoding, tolerance=self.face_recognition_tolerance)
                     name = "Unknown"
                     confidence = 0
                     class_info = ""
+                    anti_spoofing_result = {}
                     
                     # Get best match
                     if len(self.known_face_encodings) > 0:
@@ -216,7 +245,44 @@ class FaceRecognitionSystem:
                                     # Increase confidence for verified matches
                                     confidence = min(100, confidence + 10)
                     
-                    face_matches.append((name, confidence, class_info))
+                    # Perform anti-spoofing check if enabled
+                    if self.enable_anti_spoofing:
+                        # Extract face region for anti-spoofing check
+                        top, right, bottom, left = face_locations[i]
+                        face_img = rgb_frame[top:bottom, left:right]
+                        
+                        # Make sure the face image is large enough for anti-spoofing
+                        if face_img.shape[0] > 20 and face_img.shape[1] > 20:
+                            # Check if this is a real face or a spoofing attempt
+                            is_real, real_score, spoof_metadata = self.anti_spoofing.is_real_face(face_img)
+                            
+                            if not is_real and confidence > 0:
+                                # This is likely a spoofing attempt
+                                logger.warning(f"Potential spoofing attack detected for {name}: score={real_score}")
+                                
+                                # Adjust confidence based on spoofing score
+                                spoof_penalty = int((1 - real_score) * 50)  # Up to 50% penalty
+                                confidence = max(0, confidence - spoof_penalty)
+                                
+                                # Add spoofing warning to class info
+                                if confidence < 40:
+                                    name = "Spoofing Attempt"
+                                    class_info = "ALERT: Photo/Screen detected"
+                                elif real_score < 0.3:
+                                    class_info += " [SPOOFING SUSPECTED]"
+                            
+                            # Add anti-spoofing results to metadata
+                            anti_spoofing_result = {
+                                "is_real": is_real,
+                                "real_score": real_score,
+                                "spoof_metadata": spoof_metadata
+                            }
+                        
+                        # Include liveness result if available
+                        if liveness_result:
+                            anti_spoofing_result["liveness"] = liveness_result
+                    
+                    face_matches.append((name, confidence, class_info, anti_spoofing_result))
                 
                 # Scale back up face locations
                 scaled_locations = []
@@ -249,6 +315,8 @@ class FaceRecognitionSystem:
             return True, "Two-factor authentication successful"
         elif face_name == "Unknown":
             return False, "Face not recognized"
+        elif face_name == "Spoofing Attempt":
+            return False, "Anti-spoofing check failed"
         elif rfid_name is None:
             return False, "RFID card not presented"
         else:
@@ -289,6 +357,13 @@ class FaceRecognitionSystem:
         
         if "rfid_timeout" in settings:
             self.rfid_timeout = settings["rfid_timeout"]
+        
+        if "enable_anti_spoofing" in settings:
+            self.enable_anti_spoofing = settings["enable_anti_spoofing"]
+            
+        if "spoofing_detection_threshold" in settings:
+            # Update anti-spoofing system settings
+            self.anti_spoofing.update_settings({"spoofing_detection_threshold": settings["spoofing_detection_threshold"]})
         
         # Update config
         self.config.update(settings)

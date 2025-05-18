@@ -1,15 +1,17 @@
 """
-Thread for video processing with PyQt signals.
+Modified VideoThread to display anti-spoofing information.
 """
 
 import os
 import time
 import cv2
 import numpy as np
-from typing import Optional
+from typing import Optional, Dict, Any, List, Tuple
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QImage
 from concurrent.futures import ThreadPoolExecutor
+import face_recognition
+from threading import Thread
 
 from core.video_stream import VideoStream
 from utils.logger import logger
@@ -177,7 +179,7 @@ class VideoThread(QThread):
         self.capture_complete.emit(True)
     
     def recognize_faces(self):
-        """Recognize faces in real-time from webcam."""
+        """Recognize faces in real-time from webcam with anti-spoofing detection."""
         if not self.face_system.known_face_encodings:
             self.update_status.emit("No trained faces in the database. Please capture and train first.")
             self.capture_complete.emit(False)
@@ -201,6 +203,10 @@ class VideoThread(QThread):
         # Initialize batch processing
         batch_size = self.face_system.batch_size  # Higher batch size for GPU
         frames_to_process = []
+        
+        # Anti-spoofing status message
+        anti_spoofing_status = "Anti-Spoofing: Enabled" if self.face_system.enable_anti_spoofing else "Anti-Spoofing: Disabled"
+        self.update_status.emit(anti_spoofing_status)
         
         # Create thread pool for parallel processing
         with ThreadPoolExecutor(max_workers=self.face_system.batch_size) as executor:
@@ -238,17 +244,39 @@ class VideoThread(QThread):
                     # Get results and update display
                     for processed_frame, face_locations, face_matches in batch_future.result():
                         # Display the results
-                        for (top, right, bottom, left), (name, confidence, class_info) in zip(face_locations, face_matches):
-                            # Draw face box
-                            if name == "Unknown" or confidence < 60:
-                                color = (0, 0, 255)  # Red for unknown
+                        for (top, right, bottom, left), (name, confidence, class_info, anti_spoofing_result) in zip(face_locations, face_matches):
+                            # Determine box color based on recognition and anti-spoofing results
+                            if name == "Spoofing Attempt":
+                                # Red for spoofing attempts
+                                color = (0, 0, 255)
+                            elif name == "Unknown" or confidence < 60:
+                                # Yellow for unknown or low confidence
+                                color = (0, 165, 255)
                             else:
-                                color = (0, 255, 0)  # Green for known
+                                # Green for known faces with good confidence
+                                color = (0, 255, 0)
+                                
+                                # If anti-spoofing is enabled and we have results, adjust color
+                                if self.face_system.enable_anti_spoofing and anti_spoofing_result:
+                                    if 'is_real' in anti_spoofing_result and not anti_spoofing_result['is_real']:
+                                        # Orange for potential spoofing
+                                        real_score = anti_spoofing_result.get('real_score', 0)
+                                        if real_score < 0.3:
+                                            color = (0, 69, 255)  # Orange
                             
+                            # Draw rectangle around face
                             cv2.rectangle(processed_frame, (left, top), (right, bottom), color, 2)
                             
                             # Draw name and class label
-                            if name != "Unknown":
+                            if name == "Spoofing Attempt":
+                                # Display spoofing alert
+                                cv2.putText(processed_frame, "SPOOFING DETECTED", (left + 6, bottom - 26), 
+                                            cv2.FONT_HERSHEY_DUPLEX, 0.8, (0, 0, 255), 2)
+                                
+                                # Display class info (which has the alert type)
+                                cv2.putText(processed_frame, class_info, (left + 6, bottom - 6), 
+                                            cv2.FONT_HERSHEY_DUPLEX, 0.6, (0, 0, 255), 1)
+                            elif name != "Unknown":
                                 # Display name
                                 cv2.putText(processed_frame, f"{name}", (left + 6, bottom - 26), 
                                             cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), 1)
@@ -261,6 +289,14 @@ class VideoThread(QThread):
                                 # Display confidence
                                 cv2.putText(processed_frame, f"{confidence}%", (left + 6, top - 6),
                                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 1)
+                                
+                                # Display anti-spoofing score if available
+                                if self.face_system.enable_anti_spoofing and anti_spoofing_result and 'real_score' in anti_spoofing_result:
+                                    real_score = anti_spoofing_result['real_score']
+                                    # Color based on score
+                                    score_color = (0, 255, 0) if real_score > 0.7 else (0, 165, 255) if real_score > 0.4 else (0, 0, 255)
+                                    cv2.putText(processed_frame, f"Real: {int(real_score*100)}%", (left + 6, top - 26),
+                                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, score_color, 1)
                             else:
                                 # Just display "Unknown" for unrecognized faces
                                 cv2.putText(processed_frame, "Unknown", (left + 6, bottom - 6), 
@@ -278,6 +314,12 @@ class VideoThread(QThread):
                         # Display batch size
                         cv2.putText(processed_frame, f"Batch: {batch_size}", (processed_frame.shape[1] - 160, 90), 
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                        
+                        # Display anti-spoofing status
+                        anti_spoofing_text = "Anti-Spoof: ON" if self.face_system.enable_anti_spoofing else "Anti-Spoof: OFF"
+                        anti_spoofing_color = (0, 255, 0) if self.face_system.enable_anti_spoofing else (0, 0, 255)
+                        cv2.putText(processed_frame, anti_spoofing_text, (processed_frame.shape[1] - 160, 120), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, anti_spoofing_color, 2)
                         
                         # Convert to Qt format for display
                         rgb_frame = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
