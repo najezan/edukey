@@ -1,1 +1,1 @@
-# kartu-pelajar-pintar
+# Iseng-iseng doang
