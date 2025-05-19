@@ -7,6 +7,8 @@ import pickle
 from typing import Dict, List, Set, Any, Optional, Tuple
 from utils.logger import logger
 
+import shutil
+
 class DatabaseManager:
     """
     Manages saving and loading of student, face encodings and RFID data.
@@ -286,3 +288,75 @@ class DatabaseManager:
             ]
         
         return image_files
+
+    def delete_student(self, student_name: str) -> bool:
+        """
+        Delete a student and all associated data.
+        
+        This method:
+        1. Removes the student from face encodings
+        2. Removes the student from the student database
+        3. Removes any RFID cards associated with the student
+        4. Deletes the student's dataset folder
+        5. Saves all changes to disk
+        
+        Args:
+            student_name (str): Name of the student to delete
+            
+        Returns:
+            bool: True if deletion was successful, False otherwise
+        """
+        try:
+            # Step 1: Remove from face encodings
+            if student_name in self.trained_people:
+                # Create lists for indices to keep
+                new_encodings = []
+                new_names = []
+                
+                # Filter out the student's encodings
+                for i, name in enumerate(self.face_names):
+                    if name != student_name:
+                        new_encodings.append(self.face_encodings[i])
+                        new_names.append(name)
+                
+                # Update the lists
+                self.face_encodings = new_encodings
+                self.face_names = new_names
+                self.trained_people.remove(student_name)
+                
+                # Save the updated face encodings
+                if not self.save_face_encodings():
+                    logger.error(f"Failed to save face encodings after deleting {student_name}")
+                    return False
+            
+            # Step 2: Remove from student database
+            if student_name in self.student_database:
+                del self.student_database[student_name]
+                if not self.save_student_database():
+                    logger.error(f"Failed to save student database after deleting {student_name}")
+                    return False
+            
+            # Step 3: Remove any RFID cards associated with the student
+            cards_to_remove = []
+            for card_id, name in self.rfid_database.items():
+                if name == student_name:
+                    cards_to_remove.append(card_id)
+            
+            for card_id in cards_to_remove:
+                del self.rfid_database[card_id]
+            
+            if cards_to_remove and not self.save_rfid_database():
+                logger.error(f"Failed to save RFID database after deleting {student_name}")
+                return False
+            
+            # Step 4: Delete the student's dataset folder
+            student_dir = os.path.join(self.dataset_dir, student_name)
+            if os.path.exists(student_dir):
+                shutil.rmtree(student_dir)
+            
+            logger.info(f"Successfully deleted student {student_name} and all associated data")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Error deleting student {student_name}: {e}")
+            return False

@@ -1,5 +1,5 @@
 """
-Settings tab for configuring the face recognition system.
+Modified settings tab to include anti-spoofing controls.
 """
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, 
@@ -14,7 +14,7 @@ class SettingsTab(QWidget):
     Tab for configuring system settings.
     
     This tab contains controls for configuring detection, recognition,
-    performance, and RFID settings.
+    performance, anti-spoofing and RFID settings.
     """
     
     def __init__(self, face_system):
@@ -38,6 +38,7 @@ class SettingsTab(QWidget):
         detection_group = QGroupBox("Face Detection Settings")
         recognition_group = QGroupBox("Face Recognition Settings")
         performance_group = QGroupBox("Performance Settings")
+        anti_spoofing_group = QGroupBox("Anti-Spoofing Settings")
         rfid_group = QGroupBox("RFID Settings")
         
         # Create detection settings
@@ -77,6 +78,31 @@ class SettingsTab(QWidget):
         performance_layout.addRow("Display FPS:", self.display_fps_check)
         performance_group.setLayout(performance_layout)
         
+        # Create anti-spoofing settings
+        anti_spoofing_layout = QFormLayout()
+        
+        self.enable_anti_spoofing_check = QCheckBox()
+        self.enable_anti_spoofing_check.setChecked(self.face_system.enable_anti_spoofing)
+        
+        self.spoofing_threshold_spin = QDoubleSpinBox()
+        self.spoofing_threshold_spin.setRange(0.1, 1.0)
+        self.spoofing_threshold_spin.setSingleStep(0.05)
+        self.spoofing_threshold_spin.setValue(self.face_system.anti_spoofing.spoofing_detection_threshold)
+        
+        anti_spoofing_layout.addRow("Enable Anti-Spoofing:", self.enable_anti_spoofing_check)
+        anti_spoofing_layout.addRow("Detection Threshold:", self.spoofing_threshold_spin)
+        
+        # Add description
+        anti_spoofing_description = QLabel(
+            "Anti-spoofing uses YOLO to detect presentation attacks such as\n"
+            "printed photos, digital screens, and other spoofing methods.\n"
+            "Higher threshold means stricter detection but may cause false positives."
+        )
+        anti_spoofing_description.setWordWrap(True)
+        anti_spoofing_layout.addRow(anti_spoofing_description)
+        
+        anti_spoofing_group.setLayout(anti_spoofing_layout)
+        
         # Create RFID settings
         rfid_layout = QFormLayout()
         self.rfid_port_spin = QSpinBox()
@@ -97,6 +123,8 @@ class SettingsTab(QWidget):
         system_info_layout = QVBoxLayout()
         
         gpu_status = "Available" if self.face_system.is_cuda_available() else "Not Available"
+        anti_spoofing_status = "Enabled" if self.face_system.enable_anti_spoofing else "Disabled"
+        yolo_status = "Loaded" if hasattr(self.face_system.anti_spoofing, 'yolo_model') and self.face_system.anti_spoofing.yolo_model is not None else "Not Loaded"
         
         system_info_text = f"""
         <b>GPU Acceleration:</b> {gpu_status}
@@ -105,6 +133,8 @@ class SettingsTab(QWidget):
         <b>Trained People:</b> {len(self.face_system.trained_people)}
         <b>Face Encodings:</b> {len(self.face_system.known_face_encodings)}
         <b>RFID Cards:</b> {len(self.face_system.db_manager.rfid_database)}
+        <b>Anti-Spoofing:</b> {anti_spoofing_status}
+        <b>YOLO Model:</b> {yolo_status}
         """
         
         system_info_label = QLabel(system_info_text)
@@ -119,6 +149,7 @@ class SettingsTab(QWidget):
         layout.addWidget(detection_group)
         layout.addWidget(recognition_group)
         layout.addWidget(performance_group)
+        layout.addWidget(anti_spoofing_group)
         layout.addWidget(rfid_group)
         layout.addWidget(system_info_group)
         layout.addWidget(self.save_button)
@@ -136,7 +167,9 @@ class SettingsTab(QWidget):
             "frame_skip": self.frame_skip_spin.value(),
             "display_fps": self.display_fps_check.isChecked(),
             "rfid_port": self.rfid_port_spin.value(),
-            "rfid_timeout": self.rfid_timeout_spin.value()
+            "rfid_timeout": self.rfid_timeout_spin.value(),
+            "enable_anti_spoofing": self.enable_anti_spoofing_check.isChecked(),
+            "spoofing_detection_threshold": self.spoofing_threshold_spin.value()
         }
         
         # Update face system settings
