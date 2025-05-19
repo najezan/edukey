@@ -1,5 +1,5 @@
 """
-Modified main GUI window to include anti-spoofing tab.
+Modified main GUI window to use combined Student & RFID tab.
 """
 
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget, QLabel, QMessageBox
@@ -9,10 +9,9 @@ from utils.logger import logger
 from gui.tabs.recognition_tab import RecognitionTab
 from gui.tabs.capture_tab import CaptureTab
 from gui.tabs.training_tab import TrainingTab
-from gui.tabs.database_tab import DatabaseTab
-from gui.tabs.rfid_tab import RFIDTab
-from gui.tabs.settings_tab import SettingsTab
+from gui.tabs.student_rfid_tab import StudentRFIDTab
 from gui.tabs.anti_spoofing_tab import AntiSpoofingTab
+from gui.tabs.settings_tab import SettingsTab
 from gui.dialogs.card_dialogs import NewCardDialog, ExistingCardDialog
 from threads.rfid_thread import RFIDServerThread
 
@@ -57,8 +56,7 @@ class FaceRecognitionGUI(QMainWindow):
         self.recognition_tab = RecognitionTab(self.face_system)
         self.capture_tab = CaptureTab(self.face_system)
         self.training_tab = TrainingTab(self.face_system)
-        self.database_tab = DatabaseTab(self.face_system)
-        self.rfid_tab = RFIDTab(self.face_system, self)
+        self.student_rfid_tab = StudentRFIDTab(self.face_system, self)
         self.anti_spoofing_tab = AntiSpoofingTab(self.face_system)
         self.settings_tab = SettingsTab(self.face_system)
         
@@ -66,8 +64,7 @@ class FaceRecognitionGUI(QMainWindow):
         self.tabs.addTab(self.recognition_tab, "Face Recognition")
         self.tabs.addTab(self.capture_tab, "Capture Dataset")
         self.tabs.addTab(self.training_tab, "Train Model")
-        self.tabs.addTab(self.database_tab, "Student Database")
-        self.tabs.addTab(self.rfid_tab, "RFID Management")
+        self.tabs.addTab(self.student_rfid_tab, "Student & RFID Management")
         self.tabs.addTab(self.anti_spoofing_tab, "Anti-Spoofing")
         self.tabs.addTab(self.settings_tab, "Settings")
         
@@ -99,7 +96,7 @@ class FaceRecognitionGUI(QMainWindow):
         self.training_tab.training_completed.connect(self.handle_training_completed)
         
         # Connect RFID mode signal from RFID tab
-        self.rfid_tab.mode_changed.connect(self.set_rfid_mode)
+        self.student_rfid_tab.mode_changed.connect(self.set_rfid_mode)
     
     def set_style_sheet(self):
         """Set style sheet for modern look."""
@@ -202,7 +199,7 @@ class FaceRecognitionGUI(QMainWindow):
             message (str): RFID status message
         """
         self.recognition_tab.update_rfid_status(message)
-        self.rfid_tab.update_status(message)
+        self.student_rfid_tab.update_status(message)
         self.update_status(message)
     
     def set_rfid_mode(self, mode):
@@ -287,15 +284,12 @@ class FaceRecognitionGUI(QMainWindow):
             person_name = dialog.person_name
             class_name = dialog.class_name
             
-            # Add card to database
-            self.face_system.db_manager.add_rfid_card(card_id, person_name)
+            # Add card to database automatically
+            self.student_rfid_tab.add_rfid_card(card_id, person_name)
             
             # Add class information to database
             if class_name:
                 self.face_system.db_manager.update_student_info(person_name, {"class": class_name})
-            
-            # Refresh RFID table
-            self.rfid_tab.refresh_rfid_table()
             
             # If user chose to capture dataset, start capture
             if dialog.should_capture:
@@ -327,7 +321,7 @@ class FaceRecognitionGUI(QMainWindow):
             self.face_system.db_manager.update_student_info(person_name, {"class": new_class})
             
             # Refresh database table
-            self.database_tab.refresh_database()
+            self.student_rfid_tab.refresh_database()
             
             # If user chose to capture more dataset, start capture
             if dialog.should_capture:
@@ -371,9 +365,9 @@ class FaceRecognitionGUI(QMainWindow):
         """
         if success:
             # Refresh database tab
-            self.database_tab.refresh_database()
+            self.student_rfid_tab.refresh_database()
             # Refresh RFID tab person combo
-            self.rfid_tab.refresh_person_combo()
+            self.student_rfid_tab.refresh_person_combo()
     
     def closeEvent(self, event):
         """
