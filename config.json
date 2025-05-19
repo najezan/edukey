@@ -6,9 +6,10 @@
     "display_fps": true,
     "rfid_port": 8086,
     "rfid_timeout": 20,
-    "enable_anti_spoofing": true,
-    "spoofing_detection_threshold": 1.0,
+    "enable_anti_spoofing": false,
+    "spoofing_detection_threshold": 0.1,
     "attendance_min_confidence": 50,
     "attendance_late_cutoff": "23:00",
-    "attendance_cooldown": 1
+    "attendance_cooldown": 1,
+    "camera_index": 1
 }

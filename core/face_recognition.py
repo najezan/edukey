@@ -61,6 +61,9 @@ class FaceRecognitionSystem:
         self.frame_skip = self.config.get("frame_skip", 1)
         self.display_fps = self.config.get("display_fps", True)
         
+        # Camera settings
+        self.camera_index = self.config.get("camera_index", 0)
+        
         # Initialize anti-spoofing system
         self.anti_spoofing = AntiSpoofingSystem()
         self.enable_anti_spoofing = self.config.get("enable_anti_spoofing", True)
@@ -379,6 +382,9 @@ class FaceRecognitionSystem:
         
         if "enable_anti_spoofing" in settings:
             self.enable_anti_spoofing = settings["enable_anti_spoofing"]
+            
+        if "camera_index" in settings:
+            self.camera_index = settings["camera_index"]
             
         if "spoofing_detection_threshold" in settings:
             # Update anti-spoofing system settings

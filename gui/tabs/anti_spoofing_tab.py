@@ -571,9 +571,9 @@ class CustomVideoThread(QThread):
         """Run anti-spoofing test thread."""
         self.running = True
         
-        # Initialize video stream
+        # Initialize video stream with configured camera index
         self.update_status.emit("Starting video stream...")
-        vs = VideoStream(src=0, width=1280, height=720).start()
+        vs = VideoStream(src=self.face_system.camera_index, width=1280, height=720).start()
         time.sleep(2.0)  # Allow camera to warm up
         
         self.update_status.emit("Anti-spoofing test started")

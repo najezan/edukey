@@ -61,6 +61,16 @@ class SettingsTab(QWidget):
         recognition_layout.addRow("Recognition Tolerance:", self.recognition_tolerance)
         recognition_group.setLayout(recognition_layout)
         
+        # Create camera settings
+        camera_group = QGroupBox("Camera Settings")
+        camera_layout = QFormLayout()
+        
+        self.camera_combo = QComboBox()
+        self.camera_combo.addItems(["0", "1", "2", "3"])  # Common camera indices
+        self.camera_combo.setCurrentText(str(self.face_system.config.get("camera_index", 0)))
+        camera_layout.addRow("Camera Device:", self.camera_combo)
+        camera_group.setLayout(camera_layout)
+        
         # Create performance settings
         performance_layout = QFormLayout()
         self.batch_size_spin = QSpinBox()
@@ -173,6 +183,7 @@ class SettingsTab(QWidget):
         # Add widgets to layout
         layout.addWidget(detection_group)
         layout.addWidget(recognition_group)
+        layout.addWidget(camera_group)
         layout.addWidget(performance_group)
         layout.addWidget(anti_spoofing_group)
         layout.addWidget(rfid_group)
@@ -203,6 +214,7 @@ class SettingsTab(QWidget):
         # Collect settings
         settings = {
             "detection_method": self.detection_method_combo.currentText(),
+            "camera_index": int(self.camera_combo.currentText()),
             "face_recognition_tolerance": self.recognition_tolerance.value(),
             "batch_size": self.batch_size_spin.value(),
             "frame_skip": self.frame_skip_spin.value(),
