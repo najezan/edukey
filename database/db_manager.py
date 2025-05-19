@@ -31,6 +31,7 @@ class DatabaseManager:
         self.encodings_file = os.path.join(self.trained_model_dir, "encodings.pickle")
         self.student_db_file = os.path.join(self.trained_model_dir, "student_database.pickle")
         self.rfid_db_file = os.path.join(self.trained_model_dir, "rfid_database.pickle")
+        self.attendance_db_file = os.path.join(self.trained_model_dir, "attendance_database.pickle")
         
         # Create directories if they don't exist
         self._create_dirs()
@@ -41,9 +42,62 @@ class DatabaseManager:
         self.face_encodings: List[Any] = []
         self.face_names: List[str] = []
         self.trained_people: Set[str] = set()
+        self.attendance_database: Dict[str, Dict[str, Dict[str, Any]]] = {}  # date -> {student -> record}
+        
+        # Repair corrupted pickle files if any
+        self._repair_corrupted_files()
         
         # Load data
         self._load_all_data()
+        
+        # Create attendance directory if it doesn't exist
+        self.attendance_dir = os.path.join(base_dir, "attendance")
+        if not os.path.exists(self.attendance_dir):
+            os.makedirs(self.attendance_dir)
+    
+    def _repair_corrupted_files(self) -> None:
+        """
+        Check and repair corrupted pickle files by backing up and recreating empty defaults.
+        """
+        files_to_check = [
+            (self.encodings_file, "face_encodings"),
+            (self.student_db_file, "student_database"),
+            (self.rfid_db_file, "rfid_database"),
+            (self.attendance_db_file, "attendance_database")
+        ]
+        
+        for file_path, attr_name in files_to_check:
+            if os.path.exists(file_path):
+                try:
+                    with open(file_path, "rb") as f:
+                        import pickle
+                        pickle.load(f)
+                except Exception as e:
+                    logger.error(f"Corrupted pickle file detected: {file_path}. Error: {e}")
+                    # Backup corrupted file
+                    backup_path = file_path + ".bak"
+                    try:
+                        os.rename(file_path, backup_path)
+                        logger.info(f"Backed up corrupted file to {backup_path}")
+                    except Exception as backup_error:
+                        logger.error(f"Failed to backup corrupted file {file_path}: {backup_error}")
+                    
+                    # Recreate empty default for the attribute
+                    if attr_name == "face_encodings":
+                        self.face_encodings = []
+                        self.face_names = []
+                        self.trained_people = set()
+                    elif attr_name == "student_database":
+                        self.student_database = {}
+                    elif attr_name == "rfid_database":
+                        self.rfid_database = {}
+                    elif attr_name == "attendance_database":
+                        self.attendance_database = {}
+                    
+                    # Save empty data to new file
+                    save_method = getattr(self, f"save_{attr_name}", None)
+                    if save_method:
+                        save_method()
     
     def _create_dirs(self) -> None:
         """Create necessary directories if they don't exist."""
@@ -57,6 +111,7 @@ class DatabaseManager:
         self._load_student_database()
         self._load_rfid_database()
         self._load_face_encodings()
+        self._load_attendance_database()
     
     def _load_student_database(self) -> None:
         """Load student database from disk."""
@@ -289,6 +344,93 @@ class DatabaseManager:
         
         return image_files
 
+    def _load_attendance_database(self) -> None:
+        """Load attendance database from disk."""
+        if os.path.exists(self.attendance_db_file):
+            try:
+                with open(self.attendance_db_file, "rb") as f:
+                    self.attendance_database = pickle.loads(f.read())
+                logger.info(f"Loaded attendance records for {len(self.attendance_database)} dates")
+            except Exception as e:
+                logger.error(f"Error loading attendance database: {e}")
+                self.attendance_database = {}
+    
+    def save_attendance_database(self) -> bool:
+        """
+        Save attendance database to disk.
+        
+        Returns:
+            bool: True if saved successfully, False otherwise
+        """
+        try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(self.attendance_db_file), exist_ok=True)
+            
+            with open(self.attendance_db_file, "wb") as f:
+                f.write(pickle.dumps(self.attendance_database))
+            logger.info(f"Saved attendance records for {len(self.attendance_database)} dates")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving attendance database: {e}")
+            return False
+    
+    def record_attendance(self, date: str, student_name: str, record: Dict[str, Any]) -> bool:
+        """
+        Record attendance for a student.
+        
+        Args:
+            date (str): Date in ISO format (YYYY-MM-DD)
+            student_name (str): Student name
+            record (Dict[str, Any]): Attendance record
+            
+        Returns:
+            bool: True if saved successfully, False otherwise
+        """
+        # Initialize date entry if it doesn't exist
+        if date not in self.attendance_database:
+            self.attendance_database[date] = {}
+        
+        # Add/Update attendance record
+        self.attendance_database[date][student_name] = record
+        return self.save_attendance_database()
+    
+    def get_attendance(self, date: str) -> Dict[str, Dict[str, Any]]:
+        """
+        Get attendance records for a specific date.
+        
+        Args:
+            date (str): Date in ISO format (YYYY-MM-DD)
+            
+        Returns:
+            Dict[str, Dict[str, Any]]: Attendance records for the date
+        """
+        return self.attendance_database.get(date, {})
+    
+    def get_student_attendance_history(self, 
+                                    student_name: str, 
+                                    start_date: Optional[str] = None,
+                                    end_date: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+        """
+        Get attendance history for a specific student.
+        
+        Args:
+            student_name (str): Student name
+            start_date (Optional[str]): Start date in ISO format
+            end_date (Optional[str]): End date in ISO format
+            
+        Returns:
+            Dict[str, Dict[str, Any]]: Student's attendance history
+        """
+        history = {}
+        for date, records in self.attendance_database.items():
+            if student_name in records:
+                if start_date and date < start_date:
+                    continue
+                if end_date and date > end_date:
+                    continue
+                history[date] = records[student_name]
+        return history
+    
     def delete_student(self, student_name: str) -> bool:
         """
         Delete a student and all associated data.
@@ -298,7 +440,8 @@ class DatabaseManager:
         2. Removes the student from the student database
         3. Removes any RFID cards associated with the student
         4. Deletes the student's dataset folder
-        5. Saves all changes to disk
+        5. Removes attendance records
+        6. Saves all changes to disk
         
         Args:
             student_name (str): Name of the student to delete
@@ -353,6 +496,12 @@ class DatabaseManager:
             student_dir = os.path.join(self.dataset_dir, student_name)
             if os.path.exists(student_dir):
                 shutil.rmtree(student_dir)
+            
+            # Step 5: Remove attendance records
+            for date in self.attendance_database:
+                if student_name in self.attendance_database[date]:
+                    del self.attendance_database[date][student_name]
+            self.save_attendance_database()
             
             logger.info(f"Successfully deleted student {student_name} and all associated data")
             return True
