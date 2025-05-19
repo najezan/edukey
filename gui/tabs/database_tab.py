@@ -3,11 +3,12 @@ Database tab for managing student information.
 """
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                           QTableWidget, QTableWidgetItem)
+                           QTableWidget, QTableWidgetItem, QMessageBox)
 from PyQt5.QtCore import Qt
 
 from gui.dialogs.student_dialogs import StudentInfoDialog
 from utils.logger import logger
+
 
 class DatabaseTab(QWidget):
     """
@@ -42,17 +43,22 @@ class DatabaseTab(QWidget):
         self.student_table.setColumnCount(3)
         self.student_table.setHorizontalHeaderLabels(["Name", "Class", "Face Encodings"])
         self.student_table.horizontalHeader().setStretchLastSection(True)
+        self.student_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.student_table.setSelectionMode(QTableWidget.SingleSelection)
         
         # Create control buttons
         button_layout = QHBoxLayout()
         self.update_button = QPushButton("Update Student Info")
+        self.delete_button = QPushButton("Delete Student")
         self.refresh_button = QPushButton("Refresh Database")
         
         button_layout.addWidget(self.update_button)
+        button_layout.addWidget(self.delete_button)
         button_layout.addWidget(self.refresh_button)
         
         # Connect buttons
         self.update_button.clicked.connect(self.update_student_info)
+        self.delete_button.clicked.connect(self.delete_student)
         self.refresh_button.clicked.connect(self.refresh_database)
         
         # Add widgets to layout
@@ -73,6 +79,59 @@ class DatabaseTab(QWidget):
             # Refresh database tab
             self.refresh_database()
             logger.info("Student information updated")
+    
+    def delete_student(self):
+        """Delete a student and all associated data."""
+        # Check if there are any students
+        if not self.face_system.trained_people:
+            QMessageBox.warning(self, "Warning", "No people in the trained model yet.")
+            return
+        
+        # Check if a student is selected
+        selected_items = self.student_table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Warning", "Please select a student to delete.")
+            return
+        
+        # Get the selected student's name
+        row = selected_items[0].row()
+        student_name = self.student_table.item(row, 0).text()
+        
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self, "Confirm Deletion",
+            f"Are you sure you want to delete {student_name} and all associated data?\n\n"
+            f"This will remove:\n"
+            f"- Student information\n"
+            f"- Face recognition data\n"
+            f"- RFID card associations\n"
+            f"- All dataset images\n\n"
+            f"This action cannot be undone!",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # Delete the student
+            if self.face_system.db_manager.delete_student(student_name):
+                # Update face system references
+                self.face_system.known_face_encodings = self.face_system.db_manager.face_encodings
+                self.face_system.known_face_names = self.face_system.db_manager.face_names
+                self.face_system.trained_people = self.face_system.db_manager.trained_people
+                self.face_system.student_database = self.face_system.db_manager.student_database
+                
+                # Refresh the database display
+                self.refresh_database()
+                
+                # Show success message
+                QMessageBox.information(self, "Success", f"Successfully deleted {student_name} and all associated data.")
+                logger.info(f"Student {student_name} deleted successfully")
+                
+                # Trigger refresh in RFID tab (if main window has access to it)
+                if hasattr(self.parent(), "main_window") and hasattr(self.parent().main_window, "rfid_tab"):
+                    self.parent().main_window.rfid_tab.refresh_rfid_table()
+                    self.parent().main_window.rfid_tab.refresh_person_combo()
+            else:
+                QMessageBox.critical(self, "Error", f"Failed to delete {student_name}. Check logs for details.")
     
     def refresh_database(self):
         """Refresh student database table."""
