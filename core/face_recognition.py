@@ -13,6 +13,7 @@ from database.db_manager import DatabaseManager
 from utils.config import Config
 from utils.logger import logger
 from core.anti_spoofing import AntiSpoofingSystem
+from core.attendance_manager import AttendanceManager
 
 # Check for GPU availability and configure dlib to use CUDA if available
 try:
@@ -46,6 +47,9 @@ class FaceRecognitionSystem:
         
         # Initialize config
         self.config = Config()
+        
+        # Initialize attendance manager
+        self.attendance_manager = AttendanceManager(self.db_manager)
         
         # Configure face detection and recognition settings
         self.detection_method = self._determine_detection_method()
@@ -236,6 +240,21 @@ class FaceRecognitionSystem:
                                 class_info = self.student_database[name].get("class", "")
                             # Convert distance to confidence percentage
                             confidence = int((1 - face_distances[best_match_index]) * 100)
+                            
+                            # Record attendance
+                            if confidence >= self.config.get("attendance_min_confidence", 85):
+                                success, message = self.attendance_manager.mark_attendance(
+                                    name, 
+                                    confidence,
+                                    verification_method="face+rfid" if self.last_rfid_person == name else "face",
+                                    class_info=class_info
+                                )
+                                
+                                if not success:
+                                    # Add attendance status to class info
+                                    class_info += f" [{message}]"
+                            else:
+                                class_info += f" [Confidence too low: {confidence}%]"
                             
                             # Check for RFID match if available
                             if self.last_rfid_person and (time.time() - self.last_rfid_time) < self.rfid_timeout:

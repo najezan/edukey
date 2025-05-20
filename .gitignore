@@ -34,3 +34,4 @@ ENV/
 data/dataset/
 data/trained_model/
 logs/
+config.json

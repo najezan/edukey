@@ -4,8 +4,9 @@ Modified settings tab to include anti-spoofing controls.
 
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, 
                            QLabel, QComboBox, QSpinBox, QDoubleSpinBox, 
-                           QCheckBox, QPushButton, QGroupBox, QMessageBox)
-from PyQt5.QtCore import Qt
+                           QCheckBox, QPushButton, QGroupBox, QMessageBox, QTimeEdit,
+                           QScrollArea)
+from PyQt5.QtCore import Qt, QTime
 
 from utils.logger import logger
 
@@ -118,6 +119,15 @@ class SettingsTab(QWidget):
         rfid_layout.addRow("RFID Authentication Timeout:", self.rfid_timeout_spin)
         rfid_group.setLayout(rfid_layout)
         
+        # Create capture settings
+        capture_group = QGroupBox("Capture Settings")
+        capture_layout = QFormLayout()
+        self.default_num_images_spin = QSpinBox()
+        self.default_num_images_spin.setRange(1, 2000)
+        self.default_num_images_spin.setValue(self.face_system.config.get("default_num_images", 500))
+        capture_layout.addRow("Default Number of Images:", self.default_num_images_spin)
+        capture_group.setLayout(capture_layout)
+        
         # Create system info display
         system_info_group = QGroupBox("System Information")
         system_info_layout = QVBoxLayout()
@@ -145,17 +155,58 @@ class SettingsTab(QWidget):
         self.save_button = QPushButton("Save Settings")
         self.save_button.clicked.connect(self.save_settings)
         
+        # Create attendance settings
+        attendance_group = QGroupBox("Attendance Settings")
+        attendance_layout = QFormLayout()
+        
+        self.min_confidence_spin = QSpinBox()
+        self.min_confidence_spin.setRange(50, 100)
+        self.min_confidence_spin.setValue(int(self.face_system.config.get("attendance_min_confidence", 85)))
+        self.min_confidence_spin.setSuffix("%")
+        
+        self.late_cutoff_time = QTimeEdit()
+        self.late_cutoff_time.setDisplayFormat("HH:mm")
+        cutoff_time = self.face_system.config.get("attendance_late_cutoff", "09:00")
+        self.late_cutoff_time.setTime(QTime.fromString(cutoff_time, "HH:mm"))
+        
+        self.attendance_cooldown_spin = QSpinBox()
+        self.attendance_cooldown_spin.setRange(1, 60)
+        self.attendance_cooldown_spin.setValue(self.face_system.config.get("attendance_cooldown", 5))
+        self.attendance_cooldown_spin.setSuffix(" minutes")
+        
+        attendance_layout.addRow("Minimum Recognition Confidence:", self.min_confidence_spin)
+        attendance_layout.addRow("Late Cutoff Time:", self.late_cutoff_time)
+        attendance_layout.addRow("Attendance Cooldown:", self.attendance_cooldown_spin)
+        attendance_group.setLayout(attendance_layout)
+        
         # Add widgets to layout
         layout.addWidget(detection_group)
         layout.addWidget(recognition_group)
         layout.addWidget(performance_group)
         layout.addWidget(anti_spoofing_group)
         layout.addWidget(rfid_group)
+        layout.addWidget(capture_group)
+        layout.addWidget(attendance_group)
         layout.addWidget(system_info_group)
         layout.addWidget(self.save_button)
         
+        # Create scroll area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        # Create container widget for scroll area
+        container = QWidget()
+        container.setLayout(layout)
+        scroll.setWidget(container)
+        
+        # Create main layout
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(scroll)
+        
         # Set layout for tab
-        self.setLayout(layout)
+        self.setLayout(main_layout)
     
     def save_settings(self):
         """Save settings."""
@@ -169,7 +220,11 @@ class SettingsTab(QWidget):
             "rfid_port": self.rfid_port_spin.value(),
             "rfid_timeout": self.rfid_timeout_spin.value(),
             "enable_anti_spoofing": self.enable_anti_spoofing_check.isChecked(),
-            "spoofing_detection_threshold": self.spoofing_threshold_spin.value()
+            "spoofing_detection_threshold": self.spoofing_threshold_spin.value(),
+            "default_num_images": self.default_num_images_spin.value(),
+            "attendance_min_confidence": int(self.min_confidence_spin.value()),
+            "attendance_late_cutoff": self.late_cutoff_time.time().toString("HH:mm"),
+            "attendance_cooldown": self.attendance_cooldown_spin.value()
         }
         
         # Update face system settings
