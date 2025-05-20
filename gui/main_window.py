@@ -15,6 +15,7 @@ from gui.tabs.settings_tab import SettingsTab
 from gui.tabs.attendance_tab import AttendanceTab
 from gui.dialogs.card_dialogs import NewCardDialog, ExistingCardDialog
 from threads.rfid_thread import RFIDServerThread
+from gui.tabs.asset_management_tab import AssetManagementTab
 
 class FaceRecognitionGUI(QMainWindow):
     """
@@ -61,12 +62,14 @@ class FaceRecognitionGUI(QMainWindow):
         self.anti_spoofing_tab = AntiSpoofingTab(self.face_system)
         self.attendance_tab = AttendanceTab(self.face_system.db_manager, self)
         self.settings_tab = SettingsTab(self.face_system)
+        self.asset_management_tab = AssetManagementTab(self.face_system.db_manager, self)
         
         # Add tabs to tab widget
         self.tabs.addTab(self.recognition_tab, "Face Recognition")
         self.tabs.addTab(self.capture_tab, "Capture Dataset")
         self.tabs.addTab(self.training_tab, "Train Model")
         self.tabs.addTab(self.student_rfid_tab, "Student & RFID Management")
+        self.tabs.addTab(self.asset_management_tab, "Asset Management")
         self.tabs.addTab(self.anti_spoofing_tab, "Anti-Spoofing")
         self.tabs.addTab(self.attendance_tab, "Attendance")
         self.tabs.addTab(self.settings_tab, "Settings")
