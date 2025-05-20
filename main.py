@@ -13,14 +13,13 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from core.face_recognition import FaceRecognitionSystem
 from gui.main_window import FaceRecognitionGUI
-from utils.logger import setup_logger
+from utils.logger import logger
 
 def main():
     """
     Fungsi utama untuk menjalankan aplikasi.
     """
     # Setup logger
-    logger = setup_logger()
     logger.info("Starting Face Recognition System")
     
     # Create application
