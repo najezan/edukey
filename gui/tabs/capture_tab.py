@@ -44,9 +44,11 @@ class CaptureTab(QWidget):
         form_layout = QFormLayout()
         self.person_name_input = QLineEdit()
         self.class_name_input = QLineEdit()
+        # Removed self.num_images_input
         
         form_layout.addRow("Person Name:", self.person_name_input)
         form_layout.addRow("Class:", self.class_name_input)
+        # Removed Number of Images row
         
         # Create video display
         self.video_label = QLabel()
@@ -101,6 +103,7 @@ class CaptureTab(QWidget):
         """Start dataset capture."""
         person_name = self.person_name_input.text().strip()
         class_name = self.class_name_input.text().strip()
+        num_images = self.face_system.config.get("default_num_images", 500)
         
         if not person_name:
             QMessageBox.warning(self, "Warning", "Person name cannot be empty.")
@@ -128,7 +131,7 @@ class CaptureTab(QWidget):
         self.progress_bar.setValue(0)
         
         # Create and start video thread
-        self.video_thread = VideoThread(self.face_system, mode="capture", person_name=person_name)
+        self.video_thread = VideoThread(self.face_system, mode="capture", person_name=person_name, num_images=num_images)
         self.video_thread.update_frame.connect(self.update_frame)
         self.video_thread.update_status.connect(self.update_status)
         self.video_thread.update_progress.connect(self.update_progress)

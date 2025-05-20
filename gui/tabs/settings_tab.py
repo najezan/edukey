@@ -119,6 +119,15 @@ class SettingsTab(QWidget):
         rfid_layout.addRow("RFID Authentication Timeout:", self.rfid_timeout_spin)
         rfid_group.setLayout(rfid_layout)
         
+        # Create capture settings
+        capture_group = QGroupBox("Capture Settings")
+        capture_layout = QFormLayout()
+        self.default_num_images_spin = QSpinBox()
+        self.default_num_images_spin.setRange(1, 2000)
+        self.default_num_images_spin.setValue(self.face_system.config.get("default_num_images", 500))
+        capture_layout.addRow("Default Number of Images:", self.default_num_images_spin)
+        capture_group.setLayout(capture_layout)
+        
         # Create system info display
         system_info_group = QGroupBox("System Information")
         system_info_layout = QVBoxLayout()
@@ -176,6 +185,7 @@ class SettingsTab(QWidget):
         layout.addWidget(performance_group)
         layout.addWidget(anti_spoofing_group)
         layout.addWidget(rfid_group)
+        layout.addWidget(capture_group)
         layout.addWidget(attendance_group)
         layout.addWidget(system_info_group)
         layout.addWidget(self.save_button)
@@ -211,6 +221,7 @@ class SettingsTab(QWidget):
             "rfid_timeout": self.rfid_timeout_spin.value(),
             "enable_anti_spoofing": self.enable_anti_spoofing_check.isChecked(),
             "spoofing_detection_threshold": self.spoofing_threshold_spin.value(),
+            "default_num_images": self.default_num_images_spin.value(),
             "attendance_min_confidence": int(self.min_confidence_spin.value()),
             "attendance_late_cutoff": self.late_cutoff_time.time().toString("HH:mm"),
             "attendance_cooldown": self.attendance_cooldown_spin.value()

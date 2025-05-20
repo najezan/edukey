@@ -30,7 +30,7 @@ class VideoThread(QThread):
     update_progress = pyqtSignal(int)
     capture_complete = pyqtSignal(bool)
     
-    def __init__(self, face_system, mode: str = "recognition", person_name: Optional[str] = None):
+    def __init__(self, face_system, mode: str = "recognition", person_name: Optional[str] = None, num_images: int = 500):
         """
         Initialize the video thread.
         
@@ -38,11 +38,13 @@ class VideoThread(QThread):
             face_system: Face recognition system
             mode (str): Operation mode ('recognition' or 'capture')
             person_name (Optional[str]): Person name for capture mode
+            num_images (int): Number of images to capture for the dataset
         """
         super().__init__()
         self.face_system = face_system
         self.mode = mode
         self.person_name = person_name
+        self.num_images = num_images
         self.running = False
         
     def run(self):
@@ -61,7 +63,7 @@ class VideoThread(QThread):
     def capture_dataset(self):
         """Capture face dataset in a thread."""
         # Create directory for this person if it doesn't exist
-        person_dir = os.path.join(self.face_system.db_manager.dataset_dir, self.person_name)
+        person_dir = os.path.join(self.face_system.db_manager.dataset_dir, self.person_name or "")
         if not os.path.exists(person_dir):
             os.makedirs(person_dir)
         
@@ -80,7 +82,7 @@ class VideoThread(QThread):
         # Use a queue to process frames in parallel for higher FPS
         process_queue = []
         
-        while self.running and count < 500:
+        while self.running and count < self.num_images:
             # Read frame from threaded video stream
             frame = vs.read()
             if frame is None:
@@ -140,10 +142,10 @@ class VideoThread(QThread):
                     process_queue = []
                 
                 # Display count on the image
-                cv2.putText(frame, f"Captures: {count}/500", (30, 50), 
+                cv2.putText(frame, f"Captures: {count}/{self.num_images}", (30, 50), 
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 # Display progress bar
-                progress = int((count / 500) * 200)  # 200px wide progress bar
+                progress = int((count / self.num_images) * 200)  # 200px wide progress bar
                 cv2.rectangle(frame, (30, 70), (30 + progress, 90), (0, 255, 0), -1)
                 cv2.rectangle(frame, (30, 70), (230, 90), (255, 255, 255), 2)
             
@@ -164,7 +166,7 @@ class VideoThread(QThread):
             
             # Emit signal to update UI
             self.update_frame.emit(qt_image)
-            self.update_progress.emit(int((count / 500) * 100))
+            self.update_progress.emit(int((count / self.num_images) * 100))
             
             # Sleep to control frame rate
             time.sleep(0.01)

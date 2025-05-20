@@ -10,5 +10,6 @@
     "spoofing_detection_threshold": 1.0,
     "attendance_min_confidence": 50,
     "attendance_late_cutoff": "23:00",
-    "attendance_cooldown": 1
+    "attendance_cooldown": 1,
+    "default_num_images": 100
 }
