@@ -2,7 +2,7 @@
 Modified main GUI window to use combined Student & RFID tab.
 """
 
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget, QLabel, QMessageBox
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget, QLabel, QMessageBox, QCheckBox
 from PyQt5.QtCore import Qt
 
 from utils.logger import logger
@@ -85,6 +85,12 @@ class FaceRecognitionGUI(QMainWindow):
         self.status_label = QLabel("Ready")
         self.statusBar().addWidget(self.status_label)
         
+        # Add dark mode toggle
+        self.dark_mode_checkbox = QCheckBox("Dark Mode")
+        self.dark_mode_checkbox.setChecked(False)
+        self.dark_mode_checkbox.stateChanged.connect(self.toggle_dark_mode)
+        self.statusBar().addPermanentWidget(self.dark_mode_checkbox)
+        
         # Set layout for central widget
         self.central_widget.setLayout(main_layout)
         
@@ -107,88 +113,196 @@ class FaceRecognitionGUI(QMainWindow):
         # Connect RFID mode signal from RFID tab
         self.student_rfid_tab.mode_changed.connect(self.set_rfid_mode)
     
-    def set_style_sheet(self):
-        """Set style sheet for modern look."""
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f0f0f0;
-            }
-            QTabWidget::pane {
-                border: 1px solid #cccccc;
-                background-color: #ffffff;
-                border-radius: 5px;
-            }
-            QTabBar::tab {
-                background-color: #e0e0e0;
-                border: 1px solid #cccccc;
-                border-bottom: none;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-                padding: 8px 12px;
-                margin-right: 2px;
-            }
-            QTabBar::tab:selected {
-                background-color: #ffffff;
-                border-bottom: 1px solid #ffffff;
-            }
-            QPushButton {
-                background-color: #4a86e8;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 8px 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #3a76d8;
-            }
-            QPushButton:pressed {
-                background-color: #2a66c8;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #888888;
-            }
-            QLabel {
-                color: #333333;
-            }
-            QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
-                border: 1px solid #cccccc;
-                border-radius: 4px;
-                padding: 6px;
-                background-color: white;
-            }
-            QProgressBar {
-                border: 1px solid #cccccc;
-                border-radius: 4px;
-                background-color: #f0f0f0;
-                text-align: center;
-            }
-            QProgressBar::chunk {
-                background-color: #4a86e8;
-                border-radius: 3px;
-            }
-            QTableWidget {
-                border: 1px solid #cccccc;
-                border-radius: 4px;
-                background-color: white;
-                gridline-color: #e0e0e0;
-            }
-            QTableWidget::item {
-                padding: 4px;
-            }
-            QTableWidget::item:selected {
-                background-color: #e0e0ff;
-                color: black;
-            }
-            QHeaderView::section {
-                background-color: #e0e0e0;
-                padding: 6px;
-                border: 1px solid #cccccc;
-                border-left: none;
-                border-top: none;
-            }
-        """)
+    def set_style_sheet(self, dark_mode=False):
+        """Set style sheet for modern or dark look."""
+        if dark_mode:
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #232629;
+                }
+                QTabWidget::pane {
+                    border: 1px solid #444;
+                    background-color: #232629;
+                    border-radius: 5px;
+                }
+                QTabBar::tab {
+                    background-color: #2d2f31;
+                    border: 1px solid #444;
+                    border-bottom: none;
+                    border-top-left-radius: 4px;
+                    border-top-right-radius: 4px;
+                    padding: 8px 12px;
+                    margin-right: 2px;
+                    color: #e0e0e0;
+                }
+                QTabBar::tab:selected {
+                    background-color: #232629;
+                    border-bottom: 1px solid #232629;
+                    color: #fff;
+                }
+                QPushButton {
+                    background-color: #3a76d8;
+                    color: #fff;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 8px 16px;
+                }
+                QPushButton:hover {
+                    background-color: #295bb5;
+                }
+                QPushButton:pressed {
+                    background-color: #1a3d7a;
+                }
+                QPushButton:disabled {
+                    background-color: #444;
+                    color: #888;
+                }
+                QLabel, QGroupBox, QCheckBox, QRadioButton, QAbstractItemView, QMenuBar, QMenu, QStatusBar {
+                    color: #e0e0e0;
+                }
+                QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QPlainTextEdit {
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    padding: 6px;
+                    background-color: #2d2f31;
+                    color: #e0e0e0;
+                    selection-background-color: #3a76d8;
+                    selection-color: #fff;
+                }
+                QProgressBar {
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    background-color: #232629;
+                    text-align: center;
+                    color: #e0e0e0;
+                }
+                QProgressBar::chunk {
+                    background-color: #3a76d8;
+                    border-radius: 3px;
+                }
+                QTableWidget, QTableView {
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    background-color: #232629;
+                    gridline-color: #444;
+                    color: #e0e0e0;
+                    selection-background-color: #3a76d8;
+                    selection-color: #fff;
+                    alternate-background-color: #282b30;
+                }
+                QTableWidget::item, QTableView::item {
+                    padding: 4px;
+                }
+                QTableWidget::item:selected, QTableView::item:selected {
+                    background-color: #3a76d8;
+                    color: #fff;
+                }
+                QHeaderView::section {
+                    background-color: #2d2f31;
+                    padding: 6px;
+                    border: 1px solid #444;
+                    border-left: none;
+                    border-top: none;
+                    color: #e0e0e0;
+                }
+                QScrollBar:vertical, QScrollBar:horizontal {
+                    background: #232629;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #f0f0f0;
+                }
+                QTabWidget::pane {
+                    border: 1px solid #cccccc;
+                    background-color: #ffffff;
+                    border-radius: 5px;
+                }
+                QTabBar::tab {
+                    background-color: #e0e0e0;
+                    border: 1px solid #cccccc;
+                    border-bottom: none;
+                    border-top-left-radius: 4px;
+                    border-top-right-radius: 4px;
+                    padding: 8px 12px;
+                    margin-right: 2px;
+                    color: #222;
+                }
+                QTabBar::tab:selected {
+                    background-color: #ffffff;
+                    border-bottom: 1px solid #ffffff;
+                    color: #111;
+                }
+                QPushButton {
+                    background-color: #4a86e8;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 8px 16px;
+                }
+                QPushButton:hover {
+                    background-color: #3a76d8;
+                }
+                QPushButton:pressed {
+                    background-color: #2a66c8;
+                }
+                QPushButton:disabled {
+                    background-color: #cccccc;
+                    color: #888888;
+                }
+                QLabel, QGroupBox, QCheckBox, QRadioButton, QAbstractItemView, QMenuBar, QMenu, QStatusBar {
+                    color: #222;
+                }
+                QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QPlainTextEdit {
+                    border: 1px solid #cccccc;
+                    border-radius: 4px;
+                    padding: 6px;
+                    background-color: white;
+                    color: #222;
+                    selection-background-color: #4a86e8;
+                    selection-color: #fff;
+                }
+                QProgressBar {
+                    border: 1px solid #cccccc;
+                    border-radius: 4px;
+                    background-color: #f0f0f0;
+                    text-align: center;
+                    color: #222;
+                }
+                QProgressBar::chunk {
+                    background-color: #4a86e8;
+                    border-radius: 3px;
+                }
+                QTableWidget, QTableView {
+                    border: 1px solid #cccccc;
+                    border-radius: 4px;
+                    background-color: white;
+                    gridline-color: #e0e0e0;
+                    color: #222;
+                    selection-background-color: #e0e0ff;
+                    selection-color: #111;
+                    alternate-background-color: #f5f5f5;
+                }
+                QTableWidget::item, QTableView::item {
+                    padding: 4px;
+                }
+                QTableWidget::item:selected, QTableView::item:selected {
+                    background-color: #e0e0ff;
+                    color: #111;
+                }
+                QHeaderView::section {
+                    background-color: #e0e0e0;
+                    padding: 6px;
+                    border: 1px solid #cccccc;
+                    border-left: none;
+                    border-top: none;
+                    color: #222;
+                }
+                QScrollBar:vertical, QScrollBar:horizontal {
+                    background: #f0f0f0;
+                }
+            """)
     
     def update_status(self, message):
         """
@@ -256,6 +370,9 @@ class FaceRecognitionGUI(QMainWindow):
             self.student_rfid_tab.refresh_database()
             # Refresh RFID tab person combo
             self.student_rfid_tab.refresh_person_combo()
+    
+    def toggle_dark_mode(self, state):
+        self.set_style_sheet(dark_mode=bool(state))
     
     def closeEvent(self, event):
         """
