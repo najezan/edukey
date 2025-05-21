@@ -6,7 +6,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QPushButton, QLabel, QLineEdit, QHeaderView, QMessageBox,
-    QComboBox, QDialog, QFormLayout
+    QComboBox, QDialog, QFormLayout, QMainWindow, QTabWidget
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -16,13 +16,16 @@ class AssetManagementTab(QWidget):
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
+        self.main_window = parent  # Store main window reference for tab switching
         self.init_ui()
         self.load_assets()
         # Connect RFID signal to handler
         self.rfid_detected.connect(self.handle_rfid_detected)
-        # Example: If you have a thread or callback for RFID, connect it here
         if hasattr(self.db_manager, 'rfid_callback'):
             self.db_manager.rfid_callback = self.rfid_detected.emit
+        # Track last RFID and asset for return logic
+        self._last_rfid = None
+        self._last_asset = None
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -279,19 +282,96 @@ class AssetManagementTab(QWidget):
     #         print(f"Error updating class dropdown: {str(e)}")
     #         self.borrower_class.addItem("Error loading classes")
 
-    def handle_rfid_detected(self, rfid_code):
-        """Handle detected RFID, show popup with student/class and asset input."""
+    def _get_main_window(self):
+        win = self.window()
+        tabs = getattr(win, 'tabs', None)
+        if tabs and isinstance(tabs, QTabWidget):
+            return win
+        return None
+
+    def handle_rfid_detected(self, rfid_code, is_new_card=None):
+        """
+        Handle RFID card detection for asset management, matching StudentRFIDTab logic.
+        Args:
+            rfid_code (str): Card ID or person name
+            is_new_card (bool or None): True if new card, False if existing, None if unknown (for backward compatibility)
+        """
+        main_window = self.main_window
+        mode = getattr(main_window, 'rfid_mode', 'identify') if main_window else 'identify'
+        # Find student info
         student_name = ""
         student_class = ""
-        if hasattr(self.db_manager, 'student_database'):
-            for name, info in self.db_manager.student_database.items():
-                if info.get('rfid') == rfid_code:
-                    student_name = name
-                    student_class = info.get('class', '')
-                    break
-        if not student_name:
-            QMessageBox.warning(self, "RFID Not Found", f"RFID {rfid_code} not registered in the database.")
-            return
+        card_id = rfid_code
+        # Try to resolve card to student
+        if hasattr(self.db_manager, 'rfid_database') and rfid_code in self.db_manager.rfid_database:
+            student_name = self.db_manager.rfid_database[rfid_code]
+            student_info = self.db_manager.student_database.get(student_name, {})
+            student_class = student_info.get('class', '')
+            is_new = False
+        else:
+            # Try to resolve by name (for identify mode)
+            if hasattr(self.db_manager, 'student_database') and rfid_code in self.db_manager.student_database:
+                student_name = rfid_code
+                student_info = self.db_manager.student_database.get(student_name, {})
+                student_class = student_info.get('class', '')
+                # Try to find card id
+                card_id = student_info.get('rfid', rfid_code)
+                is_new = False
+            else:
+                is_new = True
+        # If is_new_card is provided by signal, use it
+        if is_new_card is not None:
+            is_new = is_new_card
+        # Only allow detection if current tab is Asset Management
+        tabs = getattr(main_window, 'tabs', None)
+        if tabs:
+            current_tab = tabs.currentWidget()
+            if current_tab is not self:
+                return
+        if mode == "add_edit":
+            if is_new:
+                # New card: switch to Student & RFID tab for registration
+                if main_window and hasattr(main_window, 'student_rfid_tab'):
+                    main_window.tabs.setCurrentWidget(main_window.student_rfid_tab)
+                    QMessageBox.information(main_window.student_rfid_tab, "Unknown Card", f"Card ID {card_id} is not registered in the system.\n\nSwitched to Student & RFID tab for registration.")
+                else:
+                    QMessageBox.warning(self, "Unknown Card", f"Card ID {card_id} is not registered in the system.\n\nSwitch to Student & RFID tab to register this card.")
+            else:
+                # Existing card: show borrow dialog
+                self._show_borrow_dialog(card_id, student_name, student_class)
+        else:
+            # Identify mode: authenticate or return asset
+            if not is_new:
+                # If last asset borrowed by this card, return it
+                if self._last_rfid == card_id and self._last_asset:
+                    asset = self._last_asset
+                    asset_info = self.all_assets.get(asset, {})
+                    if asset_info.get('borrower') == student_name and not asset_info.get('returned_at'):
+                        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        if hasattr(self.db_manager, 'return_asset'):
+                            success = self.db_manager.return_asset(asset, now)
+                            if success:
+                                self.load_assets()
+                                QMessageBox.information(self, "Returned", f"{asset} returned by {student_name}.")
+                            else:
+                                QMessageBox.warning(self, "Error", f"Failed to return {asset}.")
+                        self._last_rfid = None
+                        self._last_asset = None
+                        return
+                    else:
+                        self._last_rfid = None
+                        self._last_asset = None
+                # Otherwise, show borrow dialog
+                self._show_borrow_dialog(card_id, student_name, student_class)
+            else:
+                # New card in identify mode: switch to Student & RFID tab for registration
+                if main_window and hasattr(main_window, 'student_rfid_tab'):
+                    main_window.tabs.setCurrentWidget(main_window.student_rfid_tab)
+                    QMessageBox.information(main_window.student_rfid_tab, "Unknown Card", f"Card ID {card_id} is not registered in the system.\n\nSwitched to Student & RFID tab for registration.")
+                else:
+                    QMessageBox.warning(self, "Unknown Card", f"Card ID {card_id} is not registered in the system.\n\nSwitch to Student & RFID tab to register this card.")
+
+    def _show_borrow_dialog(self, card_id, student_name, student_class):
         dialog = QDialog(self)
         dialog.setWindowTitle("Asset Borrowing via RFID")
         layout = QFormLayout(dialog)
@@ -319,9 +399,14 @@ class AssetManagementTab(QWidget):
                 if success:
                     self.load_assets()
                     QMessageBox.information(self, "Success", f"{asset} borrowed by {student_name}.")
+                    self._last_rfid = card_id
+                    self._last_asset = asset
                     dialog.accept()
                 else:
                     QMessageBox.warning(dialog, "Failed", "Failed borrow asset.")
         btn_borrow.clicked.connect(do_borrow)
         btn_cancel.clicked.connect(dialog.reject)
         dialog.exec_()
+        if dialog.result() != QDialog.Accepted:
+            self._last_rfid = None
+            self._last_asset = None

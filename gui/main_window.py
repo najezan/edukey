@@ -40,8 +40,6 @@ class FaceRecognitionGUI(QMainWindow):
         
         # Create RFID server thread
         self.rfid_server = RFIDServerThread(face_system)
-        self.rfid_server.rfid_detected.connect(self.handle_rfid_detection)
-        self.rfid_server.update_status.connect(self.update_rfid_status)
         
         # Set up the main window
         self.setWindowTitle("Face Recognition System with RFID and Anti-Spoofing")
@@ -73,6 +71,11 @@ class FaceRecognitionGUI(QMainWindow):
         self.tabs.addTab(self.anti_spoofing_tab, "Anti-Spoofing")
         self.tabs.addTab(self.attendance_tab, "Attendance")
         self.tabs.addTab(self.settings_tab, "Settings")
+        
+        # Now connect RFID server signals (after self.student_rfid_tab is created)
+        self.rfid_server.rfid_detected.connect(self.student_rfid_tab.handle_rfid_detection)
+        self.rfid_server.rfid_detected.connect(self.asset_management_tab.handle_rfid_detected)
+        self.rfid_server.update_status.connect(self.update_rfid_status)
         
         # Create main layout and add tab widget
         main_layout = QVBoxLayout()
@@ -220,127 +223,6 @@ class FaceRecognitionGUI(QMainWindow):
         
         mode_text = "Identify" if mode == "identify" else "Add/Edit"
         self.update_rfid_status(f"RFID Mode: {mode_text}")
-    
-    def handle_rfid_detection(self, identifier, is_new_card):
-        """
-        Handle RFID card detection based on current mode.
-        
-        Args:
-            identifier (str): Card ID or person name
-            is_new_card (bool): True if the card is new, False if existing
-        """
-        if self.rfid_mode == "add_edit":
-            # Add/Edit mode - show dialogs for new or existing cards
-            if is_new_card:
-                # This is a new card, show registration dialog
-                card_id = identifier  # For new cards, identifier is the card ID
-                self.handle_new_card(card_id)
-            else:
-                # This is an existing card, show management dialog
-                person_name = identifier  # For existing cards, identifier is the person name
-                card_id = self.find_card_id_by_person(person_name)
-                self.handle_existing_card(card_id, person_name)
-        else:
-            # Identify mode - just use the card for authentication
-            if not is_new_card:
-                # This is an existing card, use it for authentication
-                person_name = identifier  # For existing cards, identifier is the person name
-                
-                # Set RFID authentication in face system
-                self.face_system.set_rfid_authentication(person_name)
-                
-                # Update RFID status in recognition tab
-                self.update_rfid_status(f"RFID Card: {person_name} authenticated")
-                
-                # Show a small notification
-                QMessageBox.information(self, "RFID Authentication", 
-                                       f"Card authenticated for {person_name}")
-            else:
-                # This is a new card, show warning
-                card_id = identifier
-                QMessageBox.warning(self, "Unknown Card", 
-                                   f"Card ID {card_id} is not registered in the system.\n\n"
-                                   f"Switch to Add/Edit mode to register this card.")
-    
-    def find_card_id_by_person(self, person_name):
-        """
-        Find card ID by person name.
-        
-        Args:
-            person_name (str): Person name
-            
-        Returns:
-            str: Card ID or None if not found
-        """
-        for card_id, name in self.face_system.db_manager.rfid_database.items():
-            if name == person_name:
-                return card_id
-        return None
-    
-    def handle_new_card(self, card_id):
-        """
-        Handle new RFID card detection.
-        
-        Args:
-            card_id (str): RFID card ID
-        """
-        dialog = NewCardDialog(self.face_system, card_id, self)
-        if dialog.exec_():
-            # Register the card
-            person_name = dialog.person_name
-            class_name = dialog.class_name
-            
-            # Add card to database automatically
-            self.student_rfid_tab.add_rfid_card(card_id, person_name)
-            
-            # Add class information to database
-            if class_name:
-                self.face_system.db_manager.update_student_info(person_name, {"class": class_name})
-            
-            # If user chose to capture dataset, start capture
-            if dialog.should_capture:
-                # Switch to capture tab
-                self.tabs.setCurrentIndex(1)  # Index 1 is the capture tab
-                
-                # Set person name and class in capture form
-                self.capture_tab.set_person_info(person_name, class_name)
-                
-                # Start capture
-                self.capture_tab.start_capture()
-            else:
-                QMessageBox.information(self, "Success", f"RFID card {card_id} registered to {person_name}")
-    
-    def handle_existing_card(self, card_id, person_name):
-        """
-        Handle existing RFID card detection.
-        
-        Args:
-            card_id (str): RFID card ID
-            person_name (str): Person name
-        """
-        dialog = ExistingCardDialog(self.face_system, card_id, person_name, self)
-        if dialog.exec_():
-            # Update class information
-            new_class = dialog.class_name
-            
-            # Update database
-            self.face_system.db_manager.update_student_info(person_name, {"class": new_class})
-            
-            # Refresh database table
-            self.student_rfid_tab.refresh_database()
-            
-            # If user chose to capture more dataset, start capture
-            if dialog.should_capture:
-                # Switch to capture tab
-                self.tabs.setCurrentIndex(1)  # Index 1 is the capture tab
-                
-                # Set person name and class in capture form
-                self.capture_tab.set_person_info(person_name, new_class)
-                
-                # Start capture
-                self.capture_tab.start_capture()
-            else:
-                QMessageBox.information(self, "Success", f"Updated information for {person_name}")
     
     def handle_capture_completed(self, success, person_name):
         """
