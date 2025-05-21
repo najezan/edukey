@@ -112,6 +112,7 @@ class DatabaseManager:
         self._load_rfid_database()
         self._load_face_encodings()
         self._load_attendance_database()
+        self.load_asset_database()
     
     def _load_student_database(self) -> None:
         """Load student database from disk."""
@@ -153,6 +154,63 @@ class DatabaseManager:
                 self.face_encodings = []
                 self.face_names = []
                 self.trained_people = set()
+    
+    # Asset Management
+    def get_assets(self):
+        if not hasattr(self, 'asset_database'):
+            self.asset_database = {}
+        return self.asset_database
+
+    def borrow_asset(self, asset_name, borrower, classes, borrowed_at):
+        if not hasattr(self, 'asset_database'):
+            self.asset_database = {}
+        record = self.asset_database.get(asset_name, {})
+        if record.get('borrowed_at') and not record.get('returned_at'):
+            return False  # Already borrowed and not returned
+        self.asset_database[asset_name] = {
+            'borrower': borrower,
+            'class': classes,
+            'borrowed_at': borrowed_at,
+            'returned_at': ''
+        }
+        self.save_asset_database()
+        return True
+
+    def return_asset(self, asset_name, returned_at):
+        if not hasattr(self, 'asset_database'):
+            self.asset_database = {}
+        record = self.asset_database.get(asset_name)
+        if not record or record.get('returned_at'):
+            return False  # Not borrowed or already returned
+        self.asset_database[asset_name]['returned_at'] = returned_at
+        self.save_asset_database()
+        return True
+
+    def delete_asset(self, asset_name):
+        """Delete an asset record from the database."""
+        if not hasattr(self, 'asset_database'):
+            self.asset_database = {}
+        if asset_name in self.asset_database:
+            del self.asset_database[asset_name]
+            self.save_asset_database()
+            return True
+        return False
+
+    def save_asset_database(self):
+        import os, pickle
+        asset_db_file = os.path.join(self.base_dir, 'trained_model', 'asset_database.pickle')
+        os.makedirs(os.path.dirname(asset_db_file), exist_ok=True)
+        with open(asset_db_file, 'wb') as f:
+            pickle.dump(self.asset_database, f)
+
+    def load_asset_database(self):
+        import os, pickle
+        asset_db_file = os.path.join(self.base_dir, 'trained_model', 'asset_database.pickle')
+        if os.path.exists(asset_db_file):
+            with open(asset_db_file, 'rb') as f:
+                self.asset_database = pickle.load(f)
+        else:
+            self.asset_database = {}
     
     def save_student_database(self) -> bool:
         """
