@@ -186,6 +186,16 @@ class DatabaseManager:
         self.save_asset_database()
         return True
 
+    def delete_asset(self, asset_name):
+        """Delete an asset record from the database."""
+        if not hasattr(self, 'asset_database'):
+            self.asset_database = {}
+        if asset_name in self.asset_database:
+            del self.asset_database[asset_name]
+            self.save_asset_database()
+            return True
+        return False
+
     def save_asset_database(self):
         import os, pickle
         asset_db_file = os.path.join(self.base_dir, 'trained_model', 'asset_database.pickle')
