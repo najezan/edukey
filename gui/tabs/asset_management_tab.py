@@ -226,3 +226,102 @@ class AssetManagementTab(QWidget):
         except Exception as e:
             print(f"Error populating borrower dropdown: {str(e)}")
             self.borrower_input.addItem("Error loading students")
+    
+    # def update_class_dropdown(self):
+    #     """Update class dropdown based on the selected student with improved error handling and synchronization."""
+    #     try:
+    #         # Get selected student
+    #         student_name = self.borrower_input.currentText()
+            
+    #         # Store current selection if any
+    #         current_class = self.borrower_class.currentText() if self.borrower_class.count() > 0 else ""
+            
+    #         # Clear the class dropdown
+    #         self.borrower_class.clear()
+            
+    #         student_info = {}
+    #         if student_name and student_name not in ["No students available", "No students database available", "Error loading students"]:
+    #             # Get available classes from the student database
+    #             available_classes = set()
+                
+    #             # First, add the class of the selected student if available
+    #             if hasattr(self.db_manager, 'student_database'):
+    #                 student_info = self.db_manager.student_database.get(student_name, {})
+    #                 student_class = student_info.get("class", "")
+    #                 if student_class:
+    #                     available_classes.add(student_class)
+                
+    #             # Then add all classes from all students for flexibility
+    #             if hasattr(self.db_manager, 'student_database'):
+    #                 for student_data in self.db_manager.student_database.values():
+    #                     if "class" in student_data and student_data["class"]:
+    #                         available_classes.add(student_data["class"])
+                
+    #             if available_classes:
+    #                 # Add classes to dropdown
+    #                 self.borrower_class.addItems(sorted(available_classes))
+                    
+    #                 # Try to restore previous selection if available
+    #                 if current_class:
+    #                     index = self.borrower_class.findText(current_class)
+    #                     if index >= 0:
+    #                         self.borrower_class.setCurrentIndex(index)
+    #                 # Otherwise select the student's class if available
+    #                 elif student_info.get("class"):
+    #                     index = self.borrower_class.findText(student_info["class"])
+    #                     if index >= 0:
+    #                         self.borrower_class.setCurrentIndex(index)
+    #             else:
+    #                 self.borrower_class.addItem("No classes available")
+    #         else:
+    #             self.borrower_class.addItem("No class available")
+    #     except Exception as e:
+    #         print(f"Error updating class dropdown: {str(e)}")
+    #         self.borrower_class.addItem("Error loading classes")
+
+    def handle_rfid_detected(self, rfid_code):
+        """Handle detected RFID, show popup with student/class and asset input."""
+        student_name = ""
+        student_class = ""
+        if hasattr(self.db_manager, 'student_database'):
+            for name, info in self.db_manager.student_database.items():
+                if info.get('rfid') == rfid_code:
+                    student_name = name
+                    student_class = info.get('class', '')
+                    break
+        if not student_name:
+            QMessageBox.warning(self, "RFID Not Found", f"RFID {rfid_code} not registered in the database.")
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Asset Borrowing via RFID")
+        layout = QFormLayout(dialog)
+        name_label = QLabel(student_name)
+        class_label = QLabel(student_class)
+        asset_input = QLineEdit()
+        asset_input.setPlaceholderText("Enter asset name")
+        layout.addRow("Name:", name_label)
+        layout.addRow("Class:", class_label)
+        layout.addRow("Asset:", asset_input)
+        btn_borrow = QPushButton("Borrow")
+        btn_cancel = QPushButton("Cancel")
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(btn_borrow)
+        btn_layout.addWidget(btn_cancel)
+        layout.addRow(btn_layout)
+        def do_borrow():
+            asset = asset_input.text().strip()
+            if not asset:
+                QMessageBox.warning(dialog, "Warning", "Enter asset name.")
+                return
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if hasattr(self.db_manager, 'borrow_asset'):
+                success = self.db_manager.borrow_asset(asset, student_name, student_class, now)
+                if success:
+                    self.load_assets()
+                    QMessageBox.information(self, "Success", f"{asset} borrowed by {student_name}.")
+                    dialog.accept()
+                else:
+                    QMessageBox.warning(dialog, "Failed", "Failed borrow asset.")
+        btn_borrow.clicked.connect(do_borrow)
+        btn_cancel.clicked.connect(dialog.reject)
+        dialog.exec_()
