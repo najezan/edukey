@@ -6,7 +6,7 @@ import os
 import time
 import numpy as np
 import multiprocessing
-from typing import List, Tuple, Dict, Any, Set, Optional
+from typing import List, Tuple, Dict, Any
 import face_recognition
 
 from database.db_manager import DatabaseManager
@@ -243,9 +243,12 @@ class FaceRecognitionSystem:
                             
                             # Record attendance
                             if confidence >= self.config.get("attendance_min_confidence", 85):
+                                # Pass the original frame (before scaling) for saving
+                                original_frame_for_attendance = frame 
                                 success, message = self.attendance_manager.mark_attendance(
                                     name, 
                                     confidence,
+                                    original_frame_for_attendance, # Pass the original frame here
                                     verification_method="face+rfid" if self.last_rfid_person == name else "face",
                                     class_info=class_info
                                 )

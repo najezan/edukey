@@ -2,7 +2,7 @@
 Modified main GUI window to use combined Student & RFID tab.
 """
 
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget, QLabel, QMessageBox
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget, QLabel, QMessageBox, QCheckBox
 from PyQt5.QtCore import Qt
 
 from utils.logger import logger
@@ -40,8 +40,6 @@ class FaceRecognitionGUI(QMainWindow):
         
         # Create RFID server thread
         self.rfid_server = RFIDServerThread(face_system)
-        self.rfid_server.rfid_detected.connect(self.handle_rfid_detection)
-        self.rfid_server.update_status.connect(self.update_rfid_status)
         
         # Set up the main window
         self.setWindowTitle("Face Recognition System with RFID and Anti-Spoofing")
@@ -74,6 +72,11 @@ class FaceRecognitionGUI(QMainWindow):
         self.tabs.addTab(self.attendance_tab, "Attendance")
         self.tabs.addTab(self.settings_tab, "Settings")
         
+        # Now connect RFID server signals (after self.student_rfid_tab is created)
+        self.rfid_server.rfid_detected.connect(self.student_rfid_tab.handle_rfid_detection)
+        self.rfid_server.rfid_detected.connect(self.asset_management_tab.handle_rfid_detected)
+        self.rfid_server.update_status.connect(self.update_rfid_status)
+        
         # Create main layout and add tab widget
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.tabs)
@@ -81,6 +84,12 @@ class FaceRecognitionGUI(QMainWindow):
         # Create status bar
         self.status_label = QLabel("Ready")
         self.statusBar().addWidget(self.status_label)
+        
+        # Add dark mode toggle
+        self.dark_mode_checkbox = QCheckBox("Dark Mode")
+        self.dark_mode_checkbox.setChecked(False)
+        self.dark_mode_checkbox.stateChanged.connect(self.toggle_dark_mode)
+        self.statusBar().addPermanentWidget(self.dark_mode_checkbox)
         
         # Set layout for central widget
         self.central_widget.setLayout(main_layout)
@@ -104,88 +113,196 @@ class FaceRecognitionGUI(QMainWindow):
         # Connect RFID mode signal from RFID tab
         self.student_rfid_tab.mode_changed.connect(self.set_rfid_mode)
     
-    def set_style_sheet(self):
-        """Set style sheet for modern look."""
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f0f0f0;
-            }
-            QTabWidget::pane {
-                border: 1px solid #cccccc;
-                background-color: #ffffff;
-                border-radius: 5px;
-            }
-            QTabBar::tab {
-                background-color: #e0e0e0;
-                border: 1px solid #cccccc;
-                border-bottom: none;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-                padding: 8px 12px;
-                margin-right: 2px;
-            }
-            QTabBar::tab:selected {
-                background-color: #ffffff;
-                border-bottom: 1px solid #ffffff;
-            }
-            QPushButton {
-                background-color: #4a86e8;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 8px 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #3a76d8;
-            }
-            QPushButton:pressed {
-                background-color: #2a66c8;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #888888;
-            }
-            QLabel {
-                color: #333333;
-            }
-            QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
-                border: 1px solid #cccccc;
-                border-radius: 4px;
-                padding: 6px;
-                background-color: white;
-            }
-            QProgressBar {
-                border: 1px solid #cccccc;
-                border-radius: 4px;
-                background-color: #f0f0f0;
-                text-align: center;
-            }
-            QProgressBar::chunk {
-                background-color: #4a86e8;
-                border-radius: 3px;
-            }
-            QTableWidget {
-                border: 1px solid #cccccc;
-                border-radius: 4px;
-                background-color: white;
-                gridline-color: #e0e0e0;
-            }
-            QTableWidget::item {
-                padding: 4px;
-            }
-            QTableWidget::item:selected {
-                background-color: #e0e0ff;
-                color: black;
-            }
-            QHeaderView::section {
-                background-color: #e0e0e0;
-                padding: 6px;
-                border: 1px solid #cccccc;
-                border-left: none;
-                border-top: none;
-            }
-        """)
+    def set_style_sheet(self, dark_mode=False):
+        """Set style sheet for modern or dark look."""
+        if dark_mode:
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #232629;
+                }
+                QTabWidget::pane {
+                    border: 1px solid #444;
+                    background-color: #232629;
+                    border-radius: 5px;
+                }
+                QTabBar::tab {
+                    background-color: #2d2f31;
+                    border: 1px solid #444;
+                    border-bottom: none;
+                    border-top-left-radius: 4px;
+                    border-top-right-radius: 4px;
+                    padding: 8px 12px;
+                    margin-right: 2px;
+                    color: #e0e0e0;
+                }
+                QTabBar::tab:selected {
+                    background-color: #232629;
+                    border-bottom: 1px solid #232629;
+                    color: #fff;
+                }
+                QPushButton {
+                    background-color: #3a76d8;
+                    color: #fff;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 8px 16px;
+                }
+                QPushButton:hover {
+                    background-color: #295bb5;
+                }
+                QPushButton:pressed {
+                    background-color: #1a3d7a;
+                }
+                QPushButton:disabled {
+                    background-color: #444;
+                    color: #888;
+                }
+                QLabel, QGroupBox, QCheckBox, QRadioButton, QAbstractItemView, QMenuBar, QMenu, QStatusBar {
+                    color: #e0e0e0;
+                }
+                QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QPlainTextEdit {
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    padding: 6px;
+                    background-color: #2d2f31;
+                    color: #e0e0e0;
+                    selection-background-color: #3a76d8;
+                    selection-color: #fff;
+                }
+                QProgressBar {
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    background-color: #232629;
+                    text-align: center;
+                    color: #e0e0e0;
+                }
+                QProgressBar::chunk {
+                    background-color: #3a76d8;
+                    border-radius: 3px;
+                }
+                QTableWidget, QTableView {
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    background-color: #232629;
+                    gridline-color: #444;
+                    color: #e0e0e0;
+                    selection-background-color: #3a76d8;
+                    selection-color: #fff;
+                    alternate-background-color: #282b30;
+                }
+                QTableWidget::item, QTableView::item {
+                    padding: 4px;
+                }
+                QTableWidget::item:selected, QTableView::item:selected {
+                    background-color: #3a76d8;
+                    color: #fff;
+                }
+                QHeaderView::section {
+                    background-color: #2d2f31;
+                    padding: 6px;
+                    border: 1px solid #444;
+                    border-left: none;
+                    border-top: none;
+                    color: #e0e0e0;
+                }
+                QScrollBar:vertical, QScrollBar:horizontal {
+                    background: #232629;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #f0f0f0;
+                }
+                QTabWidget::pane {
+                    border: 1px solid #cccccc;
+                    background-color: #ffffff;
+                    border-radius: 5px;
+                }
+                QTabBar::tab {
+                    background-color: #e0e0e0;
+                    border: 1px solid #cccccc;
+                    border-bottom: none;
+                    border-top-left-radius: 4px;
+                    border-top-right-radius: 4px;
+                    padding: 8px 12px;
+                    margin-right: 2px;
+                    color: #222;
+                }
+                QTabBar::tab:selected {
+                    background-color: #ffffff;
+                    border-bottom: 1px solid #ffffff;
+                    color: #111;
+                }
+                QPushButton {
+                    background-color: #4a86e8;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 8px 16px;
+                }
+                QPushButton:hover {
+                    background-color: #3a76d8;
+                }
+                QPushButton:pressed {
+                    background-color: #2a66c8;
+                }
+                QPushButton:disabled {
+                    background-color: #cccccc;
+                    color: #888888;
+                }
+                QLabel, QGroupBox, QCheckBox, QRadioButton, QAbstractItemView, QMenuBar, QMenu, QStatusBar {
+                    color: #222;
+                }
+                QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QPlainTextEdit {
+                    border: 1px solid #cccccc;
+                    border-radius: 4px;
+                    padding: 6px;
+                    background-color: white;
+                    color: #222;
+                    selection-background-color: #4a86e8;
+                    selection-color: #fff;
+                }
+                QProgressBar {
+                    border: 1px solid #cccccc;
+                    border-radius: 4px;
+                    background-color: #f0f0f0;
+                    text-align: center;
+                    color: #222;
+                }
+                QProgressBar::chunk {
+                    background-color: #4a86e8;
+                    border-radius: 3px;
+                }
+                QTableWidget, QTableView {
+                    border: 1px solid #cccccc;
+                    border-radius: 4px;
+                    background-color: white;
+                    gridline-color: #e0e0e0;
+                    color: #222;
+                    selection-background-color: #e0e0ff;
+                    selection-color: #111;
+                    alternate-background-color: #f5f5f5;
+                }
+                QTableWidget::item, QTableView::item {
+                    padding: 4px;
+                }
+                QTableWidget::item:selected, QTableView::item:selected {
+                    background-color: #e0e0ff;
+                    color: #111;
+                }
+                QHeaderView::section {
+                    background-color: #e0e0e0;
+                    padding: 6px;
+                    border: 1px solid #cccccc;
+                    border-left: none;
+                    border-top: none;
+                    color: #222;
+                }
+                QScrollBar:vertical, QScrollBar:horizontal {
+                    background: #f0f0f0;
+                }
+            """)
     
     def update_status(self, message):
         """
@@ -221,127 +338,6 @@ class FaceRecognitionGUI(QMainWindow):
         mode_text = "Identify" if mode == "identify" else "Add/Edit"
         self.update_rfid_status(f"RFID Mode: {mode_text}")
     
-    def handle_rfid_detection(self, identifier, is_new_card):
-        """
-        Handle RFID card detection based on current mode.
-        
-        Args:
-            identifier (str): Card ID or person name
-            is_new_card (bool): True if the card is new, False if existing
-        """
-        if self.rfid_mode == "add_edit":
-            # Add/Edit mode - show dialogs for new or existing cards
-            if is_new_card:
-                # This is a new card, show registration dialog
-                card_id = identifier  # For new cards, identifier is the card ID
-                self.handle_new_card(card_id)
-            else:
-                # This is an existing card, show management dialog
-                person_name = identifier  # For existing cards, identifier is the person name
-                card_id = self.find_card_id_by_person(person_name)
-                self.handle_existing_card(card_id, person_name)
-        else:
-            # Identify mode - just use the card for authentication
-            if not is_new_card:
-                # This is an existing card, use it for authentication
-                person_name = identifier  # For existing cards, identifier is the person name
-                
-                # Set RFID authentication in face system
-                self.face_system.set_rfid_authentication(person_name)
-                
-                # Update RFID status in recognition tab
-                self.update_rfid_status(f"RFID Card: {person_name} authenticated")
-                
-                # Show a small notification
-                QMessageBox.information(self, "RFID Authentication", 
-                                       f"Card authenticated for {person_name}")
-            else:
-                # This is a new card, show warning
-                card_id = identifier
-                QMessageBox.warning(self, "Unknown Card", 
-                                   f"Card ID {card_id} is not registered in the system.\n\n"
-                                   f"Switch to Add/Edit mode to register this card.")
-    
-    def find_card_id_by_person(self, person_name):
-        """
-        Find card ID by person name.
-        
-        Args:
-            person_name (str): Person name
-            
-        Returns:
-            str: Card ID or None if not found
-        """
-        for card_id, name in self.face_system.db_manager.rfid_database.items():
-            if name == person_name:
-                return card_id
-        return None
-    
-    def handle_new_card(self, card_id):
-        """
-        Handle new RFID card detection.
-        
-        Args:
-            card_id (str): RFID card ID
-        """
-        dialog = NewCardDialog(self.face_system, card_id, self)
-        if dialog.exec_():
-            # Register the card
-            person_name = dialog.person_name
-            class_name = dialog.class_name
-            
-            # Add card to database automatically
-            self.student_rfid_tab.add_rfid_card(card_id, person_name)
-            
-            # Add class information to database
-            if class_name:
-                self.face_system.db_manager.update_student_info(person_name, {"class": class_name})
-            
-            # If user chose to capture dataset, start capture
-            if dialog.should_capture:
-                # Switch to capture tab
-                self.tabs.setCurrentIndex(1)  # Index 1 is the capture tab
-                
-                # Set person name and class in capture form
-                self.capture_tab.set_person_info(person_name, class_name)
-                
-                # Start capture
-                self.capture_tab.start_capture()
-            else:
-                QMessageBox.information(self, "Success", f"RFID card {card_id} registered to {person_name}")
-    
-    def handle_existing_card(self, card_id, person_name):
-        """
-        Handle existing RFID card detection.
-        
-        Args:
-            card_id (str): RFID card ID
-            person_name (str): Person name
-        """
-        dialog = ExistingCardDialog(self.face_system, card_id, person_name, self)
-        if dialog.exec_():
-            # Update class information
-            new_class = dialog.class_name
-            
-            # Update database
-            self.face_system.db_manager.update_student_info(person_name, {"class": new_class})
-            
-            # Refresh database table
-            self.student_rfid_tab.refresh_database()
-            
-            # If user chose to capture more dataset, start capture
-            if dialog.should_capture:
-                # Switch to capture tab
-                self.tabs.setCurrentIndex(1)  # Index 1 is the capture tab
-                
-                # Set person name and class in capture form
-                self.capture_tab.set_person_info(person_name, new_class)
-                
-                # Start capture
-                self.capture_tab.start_capture()
-            else:
-                QMessageBox.information(self, "Success", f"Updated information for {person_name}")
-    
     def handle_capture_completed(self, success, person_name):
         """
         Handle capture completion.
@@ -374,6 +370,9 @@ class FaceRecognitionGUI(QMainWindow):
             self.student_rfid_tab.refresh_database()
             # Refresh RFID tab person combo
             self.student_rfid_tab.refresh_person_combo()
+    
+    def toggle_dark_mode(self, state):
+        self.set_style_sheet(dark_mode=bool(state))
     
     def closeEvent(self, event):
         """

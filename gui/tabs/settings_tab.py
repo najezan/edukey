@@ -28,6 +28,62 @@ class SettingsTab(QWidget):
         super().__init__()
         self.face_system = face_system
         
+        # Set dark mode stylesheet
+        self.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #444;
+                border-radius: 5px;
+                margin-top: 1ex;
+                padding: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 0 3px;
+            }
+            QScrollArea {
+                border: none;
+            }
+            QWidget {
+                background-color: #232629;
+            }
+            QLabel {
+                color: #e0e0e0;
+            }
+            QPushButton {
+                background-color: #3a76d8;
+                color: #ffffff;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #295bb5;
+            }
+            QSpinBox, QDoubleSpinBox, QTimeEdit, QComboBox {
+                background-color: #2d2f31;
+                color: #e0e0e0;
+                border: 1px solid #444;
+                border-radius: 4px;
+                padding: 4px;
+            }
+            QCheckBox {
+                color: #e0e0e0;
+            }
+            QCheckBox::indicator {
+                width: 13px;
+                height: 13px;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 1px solid #444;
+                background: #2d2f31;
+            }
+            QCheckBox::indicator:checked {
+                border: 1px solid #3a76d8;
+                background: #3a76d8;
+            }
+        """)
+        
         # Initialize UI components
         self._init_ui()
     
