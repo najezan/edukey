@@ -8,6 +8,7 @@ from datetime import datetime, time, timedelta
 from typing import Dict, List, Optional, Tuple
 from utils.logger import logger
 from utils.config import Config
+import cv2 # Import OpenCV
 
 class AttendanceManager:
     """
@@ -37,10 +38,13 @@ class AttendanceManager:
         
         # Cache for last attendance time per person
         self.last_attendance = {}
-    
+        self.attendance_image_dir = os.path.join("data", "attendance", "images")
+        os.makedirs(self.attendance_image_dir, exist_ok=True)
+
     def mark_attendance(self, 
                        student_name: str, 
                        confidence: float, 
+                       frame, # Add frame parameter
                        verification_method: str = "face",
                        class_info: Optional[str] = None) -> Tuple[bool, str]:
         """
@@ -49,6 +53,7 @@ class AttendanceManager:
         Args:
             student_name (str): Name of the student
             confidence (float): Face recognition confidence score
+            frame: The image frame captured when attendance is marked
             verification_method (str): Method of verification (face/face+rfid)
             class_info (Optional[str]): Student's class information
             
@@ -86,17 +91,33 @@ class AttendanceManager:
                 status = "present"
             else:
                 status = "late"
-            
+
             # Update last attendance time
             self.last_attendance[student_name] = current_time
-            
+
+            # Save the captured frame
+            image_path = ""
+            if frame is not None:
+                try:
+                    timestamp_str = current_time.strftime("%Y%m%d_%H%M%S_%f")
+                    image_filename = f"{student_name}_{timestamp_str}.jpg"
+                    image_path = os.path.join(self.attendance_image_dir, image_filename)
+                    # Ensure the directory for the specific date exists
+                    os.makedirs(os.path.dirname(image_path), exist_ok=True)
+                    cv2.imwrite(image_path, frame)
+                    logger.info(f"Saved attendance image to {image_path}")
+                except Exception as e:
+                    logger.error(f"Failed to save attendance image: {e}")
+                    image_path = "" # Reset path if saving failed
+
             # Create attendance record
             attendance_record = {
                 "time_in": current_time.strftime("%H:%M:%S"),
                 "confidence": confidence,
                 "verification_method": verification_method,
                 "class": class_info or student_info.get("class", ""),
-                "status": status
+                "status": status,
+                "image_path": image_path  # Add image path to record
             }
             
             # Save attendance

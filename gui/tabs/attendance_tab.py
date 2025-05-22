@@ -5,9 +5,11 @@ Attendance tab for displaying and managing attendance records.
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QPushButton, QLabel, QComboBox, QDateEdit, QHeaderView
+    QPushButton, QLabel, QComboBox, QDateEdit, QHeaderView, QDialog, QVBoxLayout
 )
 from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtGui import QPixmap
+import os
 
 class AttendanceTab(QWidget):
     """Tab for displaying and managing attendance records."""
@@ -64,15 +66,15 @@ class AttendanceTab(QWidget):
         
         # Table for displaying attendance
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
             "Name", "Class", "Time In", "Status", 
-            "Verification Method", "Confidence"
+            "Verification Method", "Confidence", "Image"
         ])
         
         # Auto-resize columns to content
         header = self.table.horizontalHeader()
-        for i in range(6):
+        for i in range(7):
             header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
         
         # Statistics layout
@@ -91,6 +93,9 @@ class AttendanceTab(QWidget):
         layout.addLayout(stats_layout)
         
         self.setLayout(layout)
+        
+        # Connect cell clicked signal
+        self.table.cellClicked.connect(self.handle_cell_clicked)
     
     def update_class_list(self):
         """Update the class filter combo box with available classes."""
@@ -147,6 +152,21 @@ class AttendanceTab(QWidget):
             confidence = record.get("confidence", 0)
             confidence_item = QTableWidgetItem(f"{confidence}%")
             self.table.setItem(row, 5, confidence_item)
+            
+            # Image
+            image_path = record.get("image_path", "")
+            if image_path and os.path.exists(image_path):
+                pixmap = QPixmap(image_path)
+                if not pixmap.isNull():
+                    # Use FastTransformation for thumbnail to avoid blur
+                    thumb = pixmap.scaled(64, 64, Qt.KeepAspectRatio, Qt.FastTransformation)
+                    image_label = QLabel()
+                    image_label.setPixmap(thumb)
+                    self.table.setCellWidget(row, 6, image_label)
+                else:
+                    self.table.setItem(row, 6, QTableWidgetItem("No Image"))
+            else:
+                self.table.setItem(row, 6, QTableWidgetItem("No Image"))
         
         # Update statistics
         total = len(attendance)
@@ -156,3 +176,35 @@ class AttendanceTab(QWidget):
         self.total_label.setText(f"Total: {total}")
         self.present_label.setText(f"Present: {present}")
         self.late_label.setText(f"Late: {late}")
+    
+    def handle_cell_clicked(self, row, column):
+        # If the image column is clicked
+        if column == 6:
+            image_widget = self.table.cellWidget(row, 6)
+            if image_widget and isinstance(image_widget, QLabel):
+                pixmap = image_widget.pixmap()
+                # Instead of using the thumbnail, reload the original image for zoom
+                date = self.date_edit.date().toString("yyyy-MM-dd")
+                attendance = self.db_manager.get_attendance(date)
+                sorted_attendance = list(sorted(attendance.items()))
+                if row < len(sorted_attendance):
+                    _, record = sorted_attendance[row]
+                    image_path = record.get("image_path", "")
+                    if image_path and os.path.exists(image_path):
+                        orig_pixmap = QPixmap(image_path)
+                        if orig_pixmap and not orig_pixmap.isNull():
+                            dialog = QDialog(self)
+                            dialog.setWindowTitle("Zoomed Image")
+                            vbox = QVBoxLayout(dialog)
+                            label = QLabel()
+                            label.setAlignment(Qt.AlignCenter)
+                            # Show at original size or up to 400x400, whichever is smaller
+                            w = min(400, orig_pixmap.width())
+                            h = min(400, orig_pixmap.height())
+                            label.setPixmap(orig_pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                            vbox.addWidget(label)
+                            btn_close = QPushButton("Close")
+                            btn_close.clicked.connect(dialog.accept)
+                            vbox.addWidget(btn_close)
+                            dialog.setLayout(vbox)
+                            dialog.exec_()
