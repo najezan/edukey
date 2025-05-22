@@ -413,6 +413,56 @@ class DatabaseManager:
                 logger.error(f"Error loading attendance database: {e}")
                 self.attendance_database = {}
     
+    def _attendance_file_for_date(self, date: str) -> str:
+        """Get the file path for a specific date's attendance."""
+        return os.path.join(self.base_dir, "attendance", f"attendance_{date}.pickle")
+
+    def get_attendance(self, date: str) -> Dict[str, Dict[str, Any]]:
+        """
+        Lazily load attendance records for a specific date from disk.
+        
+        Args:
+            date (str): Date in ISO format (YYYY-MM-DD)
+            
+        Returns:
+            Dict[str, Dict[str, Any]]: Attendance records for the date
+        """
+        file_path = self._attendance_file_for_date(date)
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, "rb") as f:
+                    return pickle.load(f)
+            except Exception as e:
+                logger.error(f"Error loading attendance for {date}: {e}")
+                return {}
+        return {}
+
+    def record_attendance(self, date: str, student_name: str, record: Dict[str, Any]) -> bool:
+        """
+        Record attendance for a student for a specific date (lazy save).
+        
+        Args:
+            date (str): Date in ISO format (YYYY-MM-DD)
+            student_name (str): Student name
+            record (Dict[str, Any]): Attendance record
+            
+        Returns:
+            bool: True if saved successfully, False otherwise
+        """
+        file_path = self._attendance_file_for_date(date)
+        # Load existing records for the date
+        attendance = self.get_attendance(date)
+        attendance[student_name] = record
+        try:
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb") as f:
+                pickle.dump(attendance, f)
+            logger.info(f"Saved attendance for {date}, {len(attendance)} records")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving attendance for {date}: {e}")
+            return False
+    
     def save_attendance_database(self) -> bool:
         """
         Save attendance database to disk.
@@ -431,63 +481,6 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error saving attendance database: {e}")
             return False
-    
-    def record_attendance(self, date: str, student_name: str, record: Dict[str, Any]) -> bool:
-        """
-        Record attendance for a student.
-        
-        Args:
-            date (str): Date in ISO format (YYYY-MM-DD)
-            student_name (str): Student name
-            record (Dict[str, Any]): Attendance record
-            
-        Returns:
-            bool: True if saved successfully, False otherwise
-        """
-        # Initialize date entry if it doesn't exist
-        if date not in self.attendance_database:
-            self.attendance_database[date] = {}
-        
-        # Add/Update attendance record
-        self.attendance_database[date][student_name] = record
-        return self.save_attendance_database()
-    
-    def get_attendance(self, date: str) -> Dict[str, Dict[str, Any]]:
-        """
-        Get attendance records for a specific date.
-        
-        Args:
-            date (str): Date in ISO format (YYYY-MM-DD)
-            
-        Returns:
-            Dict[str, Dict[str, Any]]: Attendance records for the date
-        """
-        return self.attendance_database.get(date, {})
-    
-    def get_student_attendance_history(self, 
-                                    student_name: str, 
-                                    start_date: Optional[str] = None,
-                                    end_date: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
-        """
-        Get attendance history for a specific student.
-        
-        Args:
-            student_name (str): Student name
-            start_date (Optional[str]): Start date in ISO format
-            end_date (Optional[str]): End date in ISO format
-            
-        Returns:
-            Dict[str, Dict[str, Any]]: Student's attendance history
-        """
-        history = {}
-        for date, records in self.attendance_database.items():
-            if student_name in records:
-                if start_date and date < start_date:
-                    continue
-                if end_date and date > end_date:
-                    continue
-                history[date] = records[student_name]
-        return history
     
     def delete_student(self, student_name: str) -> bool:
         """

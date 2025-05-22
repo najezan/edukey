@@ -18,7 +18,17 @@ class Config:
         "frame_skip": 1,
         "display_fps": True,
         "rfid_port": 8080,
-        "rfid_timeout": 30
+        "rfid_timeout": 30,
+        "storage": {
+            "type": "file",  # "file" or "mysql"
+            "mysql": {
+                "host": "localhost",
+                "user": "root",
+                "password": "",
+                "database": "edukey",
+                "port": 3306
+            }
+        }
     }
     
     def __init__(self, config_file: str = "config.json"):

@@ -9,6 +9,8 @@ from typing import Dict, List, Optional, Tuple
 from utils.logger import logger
 from utils.config import Config
 import cv2 # Import OpenCV
+import face_recognition
+import numpy as np
 
 class AttendanceManager:
     """
@@ -99,12 +101,46 @@ class AttendanceManager:
             image_path = ""
             if frame is not None:
                 try:
+                    rgb_frame = frame.copy()
+                    if len(rgb_frame.shape) == 3 and rgb_frame.shape[2] == 3:
+                        face_locations = face_recognition.face_locations(rgb_frame)
+                        face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+                        known_encodings = getattr(self.db_manager, 'face_encodings', None)
+                        known_names = getattr(self.db_manager, 'face_names', None)
+                        if known_encodings is None or known_names is None:
+                            try:
+                                from core.face_recognition import FaceRecognitionSystem
+                                face_system = FaceRecognitionSystem()
+                                known_encodings = face_system.known_face_encodings
+                                known_names = face_system.known_face_names
+                            except Exception:
+                                known_encodings = []
+                                known_names = []
+                        # Only label the face of the attended student
+                        for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+                            name = "Unknown"
+                            if known_encodings and known_names:
+                                matches = face_recognition.compare_faces(known_encodings, face_encoding)
+                                face_distances = face_recognition.face_distance(known_encodings, face_encoding)
+                                if len(face_distances) > 0:
+                                    import numpy as np
+                                    best_match_index = np.argmin(face_distances)
+                                    if matches[best_match_index]:
+                                        name = known_names[best_match_index]
+                            if name == student_name:
+                                label = name
+                                label_class = ""
+                                if hasattr(self.db_manager, 'student_database') and name in self.db_manager.student_database:
+                                    label_class = self.db_manager.student_database[name].get("class", "")
+                                cv2.rectangle(rgb_frame, (left, top), (right, bottom), (0, 255, 0), 2)
+                                if class_info or label_class:
+                                    label += f" ({class_info or label_class})"
+                                cv2.putText(rgb_frame, label, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                     timestamp_str = current_time.strftime("%Y%m%d_%H%M%S_%f")
                     image_filename = f"{student_name}_{timestamp_str}.jpg"
                     image_path = os.path.join(self.attendance_image_dir, image_filename)
-                    # Ensure the directory for the specific date exists
                     os.makedirs(os.path.dirname(image_path), exist_ok=True)
-                    cv2.imwrite(image_path, frame)
+                    cv2.imwrite(image_path, rgb_frame)
                     logger.info(f"Saved attendance image to {image_path}")
                 except Exception as e:
                     logger.error(f"Failed to save attendance image: {e}")
