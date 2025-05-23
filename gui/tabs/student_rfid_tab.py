@@ -99,6 +99,12 @@ class StudentRFIDTab(QWidget):
         # Connect refresh button
         self.refresh_rfid_button.clicked.connect(self.refresh_rfid_table)
         
+        # Create delete card button
+        self.delete_card_button = QPushButton("Delete Selected Card")
+        self.delete_card_button.setStyleSheet("color: red;")
+        self.delete_card_button.clicked.connect(self.delete_rfid_card)
+        refresh_layout.addWidget(self.delete_card_button)
+        
         # Create hidden person combo for internal use (not displayed)
         self.person_combo = QComboBox()
         self.refresh_person_combo()
@@ -107,6 +113,7 @@ class StudentRFIDTab(QWidget):
         mode_group = QGroupBox("RFID Operation Mode")
         mode_layout = QVBoxLayout()
         
+        self.information_radio = QRadioButton("Information Mode")
         self.identify_radio = QRadioButton("Identify Mode")
         self.add_edit_radio = QRadioButton("Add/Edit Mode")
         
@@ -116,15 +123,19 @@ class StudentRFIDTab(QWidget):
         # Connect mode radio buttons
         self.identify_radio.toggled.connect(self.on_mode_changed)
         self.add_edit_radio.toggled.connect(self.on_mode_changed)
+        self.information_radio.toggled.connect(self.on_mode_changed)
         
         # Add mode description labels
         identify_desc = QLabel("Identify Mode: RFID cards are used for authentication and identification only.")
         add_edit_desc = QLabel("Add/Edit Mode: RFID cards trigger registration or editing dialogs.")
+        information_desc = QLabel("Information Mode: Show student information dialog when card is detected.")
         
         mode_layout.addWidget(self.identify_radio)
         mode_layout.addWidget(identify_desc)
         mode_layout.addWidget(self.add_edit_radio)
         mode_layout.addWidget(add_edit_desc)
+        mode_layout.addWidget(self.information_radio)
+        mode_layout.addWidget(information_desc)
         
         mode_group.setLayout(mode_layout)
         
@@ -352,7 +363,11 @@ class StudentRFIDTab(QWidget):
         
         # Get card ID from first column of selected row
         row = selected_items[0].row()
-        card_id = self.rfid_table.item(row, 0).text()
+        card_item = self.rfid_table.item(row, 0)
+        if card_item is None:
+            QMessageBox.warning(self, "Error", "Could not determine card ID.")
+            return
+        card_id = card_item.text()
         
         reply = QMessageBox.question(
             self, "Confirmation", 
@@ -451,6 +466,8 @@ class StudentRFIDTab(QWidget):
             mode = "identify"
         elif self.add_edit_radio.isChecked():
             mode = "add_edit"
+        elif self.information_radio.isChecked():
+            mode = "information"
         
         if mode == "add_edit":
             # Add/Edit mode - show dialogs for new or existing cards
@@ -463,6 +480,29 @@ class StudentRFIDTab(QWidget):
                 person_name = identifier  # For existing cards, identifier is the person name
                 card_id = self.find_card_id_by_person(person_name)
                 self.handle_existing_card(card_id, person_name)
+        elif mode == "information":
+            # Information mode - show student info dialog if card exists
+            if not is_new_card:
+                person_name = identifier
+                card_id = self.find_card_id_by_person(person_name)
+                # Fetch student info
+                student_info = self.face_system.db_manager.get_student_info(person_name) or {}
+                # Fetch borrow list
+                borrow_list = []
+                asset_db = getattr(self.face_system.db_manager, 'asset_database', {})
+                for asset_name, record in asset_db.items():
+                    if record.get('borrower') == person_name:
+                        borrow_list.append({
+                            'asset_name': asset_name,
+                            'borrowed_at': record.get('borrowed_at', ''),
+                            'returned_at': record.get('returned_at', '')
+                        })
+                from gui.dialogs.student_info_dialog import StudentInfoDialog
+                dialog = StudentInfoDialog(self.face_system, person_name, student_info, borrow_list, self)
+                dialog.exec_()
+            else:
+                card_id = identifier
+                QMessageBox.warning(self, "Unknown Card", f"Card ID {card_id} is not registered in the system.\n\nSwitch to Add/Edit mode to register this card.")
         else:
             # Identify mode - just use the card for authentication
             if not is_new_card:
@@ -555,9 +595,9 @@ class StudentRFIDTab(QWidget):
         if column == 4:
             image_widget = self.student_table.cellWidget(row, 4)
             if image_widget and hasattr(image_widget, 'pixmap'):
-                pixmap = image_widget.pixmap()
+                pixmap = image_widget.pixmap() if hasattr(image_widget, 'pixmap') else None
                 person_item = self.student_table.item(row, 0)
-                if person_item:
+                if person_item is not None:
                     person_name = person_item.text()
                     image_files = self.face_system.db_manager.get_person_images(person_name)
                     if image_files:
