@@ -5,7 +5,7 @@ Attendance tab for displaying and managing attendance records.
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QPushButton, QLabel, QComboBox, QDateEdit, QHeaderView, QDialog, QVBoxLayout
+    QPushButton, QLabel, QComboBox, QDateEdit, QHeaderView, QDialog, QVBoxLayout, QMessageBox
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QPixmap
@@ -62,6 +62,12 @@ class AttendanceTab(QWidget):
         controls_layout.addWidget(self.class_label)
         controls_layout.addWidget(self.class_combo)
         controls_layout.addWidget(self.refresh_btn)
+        
+        # Add Delete Attendance button
+        self.delete_btn = QPushButton("Delete Attendance")
+        self.delete_btn.clicked.connect(self.delete_attendance)
+        controls_layout.addWidget(self.delete_btn)
+        
         controls_layout.addStretch()
         
         # Table for displaying attendance
@@ -208,3 +214,25 @@ class AttendanceTab(QWidget):
                             vbox.addWidget(btn_close)
                             dialog.setLayout(vbox)
                             dialog.exec_()
+    
+    def delete_attendance(self):
+        """Delete the selected attendance record for the selected date."""
+        selected_items = self.table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Warning", "Please select a record to delete.")
+            return
+        row = selected_items[0].row()
+        name_item = self.table.item(row, 0)
+        if not name_item:
+            QMessageBox.warning(self, "Warning", "Could not determine selected student.")
+            return
+        student_name = name_item.text()
+        date = self.date_edit.date().toString("yyyy-MM-dd")
+        reply = QMessageBox.question(self, "Confirm Delete", f"Delete attendance for {student_name} on {date}?", QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            success = self.db_manager.delete_attendance_record(date, student_name)
+            if success:
+                self.load_attendance()
+                QMessageBox.information(self, "Success", f"Attendance for {student_name} on {date} deleted.")
+            else:
+                QMessageBox.warning(self, "Error", f"Failed to delete attendance for {student_name} on {date}.")

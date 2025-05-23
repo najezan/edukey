@@ -560,3 +560,31 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error deleting student {student_name}: {e}")
             return False
+    
+    def delete_attendance_record(self, date: str, student_name: str) -> bool:
+        """
+        Delete a student's attendance record for a specific date.
+        
+        Args:
+            date (str): Date in ISO format (YYYY-MM-DD)
+            student_name (str): Name of the student
+            
+        Returns:
+            bool: True if deleted successfully, False otherwise
+        """
+        file_path = self._attendance_file_for_date(date)
+        if not os.path.exists(file_path):
+            return False
+        try:
+            with open(file_path, "rb") as f:
+                attendance = pickle.load(f)
+            if student_name in attendance:
+                del attendance[student_name]
+                with open(file_path, "wb") as f:
+                    pickle.dump(attendance, f)
+                logger.info(f"Deleted attendance for {student_name} on {date}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error deleting attendance for {student_name} on {date}: {e}")
+            return False
