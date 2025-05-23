@@ -115,6 +115,7 @@ class StudentRFIDTab(QWidget):
         
         # Connect mode radio buttons
         self.identify_radio.toggled.connect(self.on_mode_changed)
+        self.add_edit_radio.toggled.connect(self.on_mode_changed)
         
         # Add mode description labels
         identify_desc = QLabel("Identify Mode: RFID cards are used for authentication and identification only.")
@@ -271,15 +272,26 @@ class StudentRFIDTab(QWidget):
         Handle mode radio button change.
         
         Args:
-            checked (bool): True if identify_radio is checked
+            checked (bool): True if the sender radio button is checked
         """
-        if checked:
+        # Determine current mode based on which radio button is checked
+        if self.identify_radio.isChecked():
             mode = "identify"
+            mode_text = "Identify"
         else:
             mode = "add_edit"
+            mode_text = "Add/Edit"
         
+        # Update server status if running
+        if hasattr(self.main_window, 'rfid_server') and self.main_window.rfid_server.running:
+            port = self.main_window.rfid_server.port
+            self.update_status(f"RFID Server: Running on port {port} (Mode: {mode_text})")
+        
+        # Emit signal for other components
         self.mode_changed.emit(mode)
-    
+        
+        logger.info(f"RFID mode changed to: {mode_text}")
+
     def scan_rfid_card(self):
         """Scan new RFID card."""
         # This would normally wait for a card scan from the ESP32
@@ -362,6 +374,9 @@ class StudentRFIDTab(QWidget):
         port = self.face_system.config.get("rfid_port", 8080)
         self.main_window.rfid_server.port = port
         
+        # Set GUI tab reference in server so it can read mode
+        self.main_window.rfid_server.gui_tab = self
+        
         # Disable start button and enable stop button
         self.start_server_button.setEnabled(False)
         self.stop_server_button.setEnabled(True)
@@ -373,7 +388,7 @@ class StudentRFIDTab(QWidget):
         mode_text = "Identify" if self.identify_radio.isChecked() else "Add/Edit"
         self.update_status(f"RFID Server: Running on port {port} (Mode: {mode_text})")
         
-        logger.info(f"RFID server started on port {port}")
+        logger.info(f"RFID server started on port {port} in {mode_text} mode")
     
     def stop_rfid_server(self):
         """Stop RFID server."""
@@ -406,13 +421,19 @@ class StudentRFIDTab(QWidget):
             identifier (str): Card ID or person name
             is_new_card (bool): True if the card is new, False if existing
         """
+        mode = ''
         # Only allow detection if current tab is Face Recognition or Student & RFID Management
         current_tab = self.main_window.tabs.currentWidget()
         allowed_tabs = [self.main_window.recognition_tab, self.main_window.student_rfid_tab]
         if current_tab not in allowed_tabs:
             return  # Ignore detection if not in allowed tabs
         
-        mode = 'add_edit' if self.main_window.rfid_mode == 'add_edit' or (hasattr(self, 'add_edit_radio') and self.add_edit_radio.isChecked()) else 'identify'
+        # Get current mode from radio buttons
+        if self.identify_radio.isChecked():
+            mode = "identify"
+        elif self.add_edit_radio.isChecked():
+            mode = "add_edit"
+        
         if mode == "add_edit":
             # Add/Edit mode - show dialogs for new or existing cards
             if is_new_card:
