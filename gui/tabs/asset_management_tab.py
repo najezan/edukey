@@ -81,18 +81,19 @@ class AssetManagementTab(QWidget):
         # self.borrower_input.currentTextChanged.connect(self.update_class_dropdown)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
+        self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels([
-            "Asset Name", "Borrower", "Class", "Borrowed At", "Returned At"
+            "Asset Name", "Borrower", "Class", "Borrowed At", "Returned At", "Face"
         ])
         header = self.table.horizontalHeader()
-        for i in range(5):
+        for i in range(6):
             header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
 
         layout.addLayout(filter_layout)
         layout.addLayout(controls_layout)
         layout.addWidget(self.table)
         self.setLayout(layout)
+        self.table.cellClicked.connect(self.handle_face_cell_clicked)
     def load_assets(self):
         self.all_assets = self.db_manager.get_assets() if hasattr(self.db_manager, 'get_assets') else {}
         self.filter_assets()
@@ -133,6 +134,22 @@ class AssetManagementTab(QWidget):
             returned_at_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, 3, borrowed_at_item)
             self.table.setItem(row, 4, returned_at_item)
+            # Show borrower's face if available
+            borrower = record.get("borrower", "")
+            image_files = self.db_manager.get_person_images(borrower) if borrower else []
+            if image_files:
+                from PyQt5.QtGui import QPixmap
+                from PyQt5.QtWidgets import QLabel
+                pixmap = QPixmap(image_files[0])
+                if not pixmap.isNull():
+                    thumb = pixmap.scaled(48, 48, Qt.KeepAspectRatio, Qt.FastTransformation)
+                    image_label = QLabel()
+                    image_label.setPixmap(thumb)
+                    self.table.setCellWidget(row, 5, image_label)
+                else:
+                    self.table.setItem(row, 5, QTableWidgetItem("No Image"))
+            else:
+                self.table.setItem(row, 5, QTableWidgetItem("No Image"))
 
 
     def borrow_asset(self):
@@ -410,3 +427,36 @@ class AssetManagementTab(QWidget):
         if dialog.result() != QDialog.Accepted:
             self._last_rfid = None
             self._last_asset = None
+
+    def handle_face_cell_clicked(self, row, column):
+        # If the face image column is clicked
+        if column == 5:
+            image_widget = self.table.cellWidget(row, 5)
+            # Defensive: ensure image_widget is QLabel and has pixmap method
+            from PyQt5.QtWidgets import QLabel
+            if isinstance(image_widget, QLabel) and hasattr(image_widget, 'pixmap'):
+                pixmap = image_widget.pixmap()
+                borrower_item = self.table.item(row, 1)
+                if borrower_item:
+                    borrower_name = borrower_item.text()
+                    image_files = self.db_manager.get_person_images(borrower_name)
+                    if image_files:
+                        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+                        from PyQt5.QtCore import Qt
+                        from PyQt5.QtGui import QPixmap
+                        orig_pixmap = QPixmap(image_files[0])
+                        if orig_pixmap and not orig_pixmap.isNull():
+                            dialog = QDialog(self)
+                            dialog.setWindowTitle("Zoomed Face Image")
+                            vbox = QVBoxLayout(dialog)
+                            label = QLabel()
+                            label.setAlignment(Qt.AlignCenter)
+                            w = min(400, orig_pixmap.width())
+                            h = min(400, orig_pixmap.height())
+                            label.setPixmap(orig_pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                            vbox.addWidget(label)
+                            btn_close = QPushButton("Close")
+                            btn_close.clicked.connect(dialog.accept)
+                            vbox.addWidget(btn_close)
+                            dialog.setLayout(vbox)
+                            dialog.exec_()
