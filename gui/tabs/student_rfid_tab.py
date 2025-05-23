@@ -55,8 +55,8 @@ class StudentRFIDTab(QWidget):
         
         # Create table for student database
         self.student_table = QTableWidget()
-        self.student_table.setColumnCount(4)
-        self.student_table.setHorizontalHeaderLabels(["Name", "Class", "Face Encodings", "Point"])
+        self.student_table.setColumnCount(5)
+        self.student_table.setHorizontalHeaderLabels(["Name", "Class", "Face Encodings", "Point", "Image"])
         self.student_table.horizontalHeader().setStretchLastSection(True)
         self.student_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.student_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -161,6 +161,9 @@ class StudentRFIDTab(QWidget):
         
         # Set main layout
         self.setLayout(main_layout)
+        
+        # Connect face image zoom handler
+        self.student_table.cellClicked.connect(self.handle_face_cell_clicked)
     
     #
     # Student Database Methods
@@ -237,21 +240,32 @@ class StudentRFIDTab(QWidget):
         # Add rows for each student
         for i, person_name in enumerate(sorted(list(self.face_system.trained_people))):
             self.student_table.insertRow(i)
-            
             # Count how many encodings are associated with this person
             encoding_count = self.face_system.known_face_names.count(person_name)
-            
             # Get class information
             class_info = self.face_system.student_database.get(person_name, {}).get("class", "Not set")
-            
             # Get point information, default to 100 if not set
             point = self.face_system.student_database.get(person_name, {}).get("point", 100)
-            
             # Set table items
             self.student_table.setItem(i, 0, QTableWidgetItem(person_name))
             self.student_table.setItem(i, 1, QTableWidgetItem(class_info))
             self.student_table.setItem(i, 2, QTableWidgetItem(str(encoding_count)))
             self.student_table.setItem(i, 3, QTableWidgetItem(str(point)))
+            # Show first image if available
+            image_files = self.face_system.db_manager.get_person_images(person_name)
+            if image_files:
+                from PyQt5.QtGui import QPixmap
+                from PyQt5.QtWidgets import QLabel
+                pixmap = QPixmap(image_files[0])
+                if not pixmap.isNull():
+                    thumb = pixmap.scaled(64, 64, Qt.KeepAspectRatio, Qt.FastTransformation)
+                    image_label = QLabel()
+                    image_label.setPixmap(thumb)
+                    self.student_table.setCellWidget(i, 4, image_label)
+                else:
+                    self.student_table.setItem(i, 4, QTableWidgetItem("No Image"))
+            else:
+                self.student_table.setItem(i, 4, QTableWidgetItem("No Image"))
         
         logger.info("Student database refreshed")
     
@@ -535,3 +549,34 @@ class StudentRFIDTab(QWidget):
                 self.main_window.capture_tab.start_capture()
             else:
                 QMessageBox.information(self, "Success", f"Updated information for {person_name}")
+
+    def handle_face_cell_clicked(self, row, column):
+        # If the image column is clicked
+        if column == 4:
+            image_widget = self.student_table.cellWidget(row, 4)
+            if image_widget and hasattr(image_widget, 'pixmap'):
+                pixmap = image_widget.pixmap()
+                person_item = self.student_table.item(row, 0)
+                if person_item:
+                    person_name = person_item.text()
+                    image_files = self.face_system.db_manager.get_person_images(person_name)
+                    if image_files:
+                        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+                        from PyQt5.QtCore import Qt
+                        from PyQt5.QtGui import QPixmap
+                        orig_pixmap = QPixmap(image_files[0])
+                        if orig_pixmap and not orig_pixmap.isNull():
+                            dialog = QDialog(self)
+                            dialog.setWindowTitle("Zoomed Face Image")
+                            vbox = QVBoxLayout(dialog)
+                            label = QLabel()
+                            label.setAlignment(Qt.AlignCenter)
+                            w = min(400, orig_pixmap.width())
+                            h = min(400, orig_pixmap.height())
+                            label.setPixmap(orig_pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                            vbox.addWidget(label)
+                            btn_close = QPushButton("Close")
+                            btn_close.clicked.connect(dialog.accept)
+                            vbox.addWidget(btn_close)
+                            dialog.setLayout(vbox)
+                            dialog.exec_()
