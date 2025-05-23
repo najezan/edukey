@@ -77,7 +77,14 @@ class AttendanceManager:
                     attendance_records = self.db_manager.get_attendance(current_date)
                     if student_name in attendance_records:
                         prev_status = attendance_records[student_name].get('status', 'unknown')
-                        return False, f"Already marked as {prev_status}"
+                        # Map status to 'hadir' or 'late'
+                        if prev_status == 'present':
+                            prev_status_display = 'hadir'
+                        elif prev_status == 'late':
+                            prev_status_display = 'telat'
+                        else:
+                            prev_status_display = prev_status
+                        return False, f"{prev_status_display}"
                     return False, "Already marked attendance"
             
             current_date = current_time.date().isoformat()

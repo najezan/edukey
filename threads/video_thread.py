@@ -70,7 +70,10 @@ class VideoThread(QThread):
         # Initialize video stream
         self.update_status.emit("Starting video stream...")
         vs = VideoStream(src=0, width=1280, height=720).start()
-        time.sleep(2.0)  # Allow camera to warm up
+        # Wait for the first valid frame, up to 2 seconds
+        start_time_poll = time.time()
+        while vs.read() is None and (time.time() - start_time_poll) < 2.0:
+            time.sleep(0.01)
         
         self.update_status.emit(f"Capturing face dataset for {self.person_name}")
         
@@ -190,7 +193,10 @@ class VideoThread(QThread):
         # Initialize video stream
         self.update_status.emit("Starting video stream...")
         vs = VideoStream(src=0, width=1280, height=720).start()
-        time.sleep(2.0)  # Allow camera to warm up
+        # Wait for the first valid frame, up to 2 seconds
+        start_time_poll = time.time()
+        while vs.read() is None and (time.time() - start_time_poll) < 2.0:
+            time.sleep(0.01)
         
         self.update_status.emit("Face recognition started")
         
