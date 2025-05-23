@@ -55,8 +55,8 @@ class StudentRFIDTab(QWidget):
         
         # Create table for student database
         self.student_table = QTableWidget()
-        self.student_table.setColumnCount(3)
-        self.student_table.setHorizontalHeaderLabels(["Name", "Class", "Face Encodings"])
+        self.student_table.setColumnCount(4)
+        self.student_table.setHorizontalHeaderLabels(["Name", "Class", "Face Encodings", "Point"])
         self.student_table.horizontalHeader().setStretchLastSection(True)
         self.student_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.student_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -244,10 +244,14 @@ class StudentRFIDTab(QWidget):
             # Get class information
             class_info = self.face_system.student_database.get(person_name, {}).get("class", "Not set")
             
+            # Get point information, default to 100 if not set
+            point = self.face_system.student_database.get(person_name, {}).get("point", 100)
+            
             # Set table items
             self.student_table.setItem(i, 0, QTableWidgetItem(person_name))
             self.student_table.setItem(i, 1, QTableWidgetItem(class_info))
             self.student_table.setItem(i, 2, QTableWidgetItem(str(encoding_count)))
+            self.student_table.setItem(i, 3, QTableWidgetItem(str(point)))
         
         logger.info("Student database refreshed")
     

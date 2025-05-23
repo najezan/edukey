@@ -588,3 +588,19 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error deleting attendance for {student_name} on {date}: {e}")
             return False
+    
+    def add_student(self, name: str, data: Dict[str, Any]) -> bool:
+        """
+        Add a new student with default point=100 if not specified.
+        
+        Args:
+            name (str): Student name
+            data (Dict[str, Any]): Student data (e.g., class, etc.)
+            
+        Returns:
+            bool: True if saved successfully, False otherwise
+        """
+        if "point" not in data:
+            data["point"] = 100
+        self.student_database[name] = data
+        return self.save_student_database()

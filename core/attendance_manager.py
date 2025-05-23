@@ -93,6 +93,12 @@ class AttendanceManager:
                 status = "present"
             else:
                 status = "late"
+                # Subtract 5 points if student is late
+                if hasattr(self.db_manager, 'student_database') and student_name in self.db_manager.student_database:
+                    current_point = self.db_manager.student_database[student_name].get("point", 100)
+                    new_point = max(0, current_point - 5)
+                    self.db_manager.student_database[student_name]["point"] = new_point
+                    self.db_manager.save_student_database()
 
             # Update last attendance time
             self.last_attendance[student_name] = current_time

@@ -40,8 +40,8 @@ class DatabaseTab(QWidget):
         
         # Create table for student database
         self.student_table = QTableWidget()
-        self.student_table.setColumnCount(3)
-        self.student_table.setHorizontalHeaderLabels(["Name", "Class", "Face Encodings"])
+        self.student_table.setColumnCount(4)
+        self.student_table.setHorizontalHeaderLabels(["Name", "Class", "Face Encodings", "Point"])
         self.student_table.horizontalHeader().setStretchLastSection(True)
         self.student_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.student_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -76,6 +76,12 @@ class DatabaseTab(QWidget):
         
         dialog = StudentInfoDialog(self.face_system, self)
         if dialog.exec_():
+            # Ensure point is set for updated/created student
+            student_name = dialog.student_combo.currentText()
+            if student_name in self.face_system.student_database:
+                if "point" not in self.face_system.student_database[student_name]:
+                    self.face_system.student_database[student_name]["point"] = 100
+                self.face_system.db_manager.save_student_database()
             # Refresh database tab
             self.refresh_database()
             logger.info("Student information updated")
@@ -148,9 +154,13 @@ class DatabaseTab(QWidget):
             # Get class information
             class_info = self.face_system.student_database.get(person_name, {}).get("class", "Not set")
             
+            # Get point information, default to 100 if not set
+            point = self.face_system.student_database.get(person_name, {}).get("point", 100)
+            
             # Set table items
             self.student_table.setItem(i, 0, QTableWidgetItem(person_name))
             self.student_table.setItem(i, 1, QTableWidgetItem(class_info))
             self.student_table.setItem(i, 2, QTableWidgetItem(str(encoding_count)))
+            self.student_table.setItem(i, 3, QTableWidgetItem(str(point)))
         
         logger.info("Student database refreshed")
