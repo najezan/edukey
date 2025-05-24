@@ -134,20 +134,25 @@ class AssetManagementTab(QWidget):
             returned_at_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, 3, borrowed_at_item)
             self.table.setItem(row, 4, returned_at_item)
-            # Show borrower's face if available
+            # Show borrower's single face image if available, else first dataset image
+            from PyQt5.QtGui import QPixmap
+            from PyQt5.QtWidgets import QLabel
+            import os
             borrower = record.get("borrower", "")
+            image_dir = self.db_manager.config.get("dataset_dir", "data/dataset") if hasattr(self.db_manager, 'config') else "data/dataset"
+            single_image_path = os.path.join(image_dir, borrower, f"{borrower}_single.jpg")
             image_files = self.db_manager.get_person_images(borrower) if borrower else []
-            if image_files:
-                from PyQt5.QtGui import QPixmap
-                from PyQt5.QtWidgets import QLabel
+            if os.path.exists(single_image_path):
+                pixmap = QPixmap(single_image_path)
+            elif image_files:
                 pixmap = QPixmap(image_files[0])
-                if not pixmap.isNull():
-                    thumb = pixmap.scaled(48, 48, Qt.KeepAspectRatio, Qt.FastTransformation)
-                    image_label = QLabel()
-                    image_label.setPixmap(thumb)
-                    self.table.setCellWidget(row, 5, image_label)
-                else:
-                    self.table.setItem(row, 5, QTableWidgetItem("No Image"))
+            else:
+                pixmap = None
+            if pixmap and not pixmap.isNull():
+                thumb = pixmap.scaled(48, 48, Qt.KeepAspectRatio, Qt.FastTransformation)
+                image_label = QLabel()
+                image_label.setPixmap(thumb)
+                self.table.setCellWidget(row, 5, image_label)
             else:
                 self.table.setItem(row, 5, QTableWidgetItem("No Image"))
 
@@ -432,31 +437,36 @@ class AssetManagementTab(QWidget):
         # If the face image column is clicked
         if column == 5:
             image_widget = self.table.cellWidget(row, 5)
-            # Defensive: ensure image_widget is QLabel and has pixmap method
-            from PyQt5.QtWidgets import QLabel
+            from PyQt5.QtWidgets import QLabel, QDialog, QVBoxLayout, QPushButton
+            from PyQt5.QtCore import Qt
+            from PyQt5.QtGui import QPixmap
             if isinstance(image_widget, QLabel) and hasattr(image_widget, 'pixmap'):
                 pixmap = image_widget.pixmap()
                 borrower_item = self.table.item(row, 1)
                 if borrower_item:
                     borrower_name = borrower_item.text()
+                    import os
+                    image_dir = self.db_manager.config.get("dataset_dir", "data/dataset") if hasattr(self.db_manager, 'config') else "data/dataset"
+                    single_image_path = os.path.join(image_dir, borrower_name, f"{borrower_name}_single.jpg")
                     image_files = self.db_manager.get_person_images(borrower_name)
-                    if image_files:
-                        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
-                        from PyQt5.QtCore import Qt
-                        from PyQt5.QtGui import QPixmap
+                    if os.path.exists(single_image_path):
+                        orig_pixmap = QPixmap(single_image_path)
+                    elif image_files:
                         orig_pixmap = QPixmap(image_files[0])
-                        if orig_pixmap and not orig_pixmap.isNull():
-                            dialog = QDialog(self)
-                            dialog.setWindowTitle("Zoomed Face Image")
-                            vbox = QVBoxLayout(dialog)
-                            label = QLabel()
-                            label.setAlignment(Qt.AlignCenter)
-                            w = min(400, orig_pixmap.width())
-                            h = min(400, orig_pixmap.height())
-                            label.setPixmap(orig_pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                            vbox.addWidget(label)
-                            btn_close = QPushButton("Close")
-                            btn_close.clicked.connect(dialog.accept)
-                            vbox.addWidget(btn_close)
-                            dialog.setLayout(vbox)
-                            dialog.exec_()
+                    else:
+                        orig_pixmap = None
+                    if orig_pixmap and not orig_pixmap.isNull():
+                        dialog = QDialog(self)
+                        dialog.setWindowTitle("Zoomed Face Image")
+                        vbox = QVBoxLayout(dialog)
+                        label = QLabel()
+                        label.setAlignment(Qt.AlignCenter)
+                        w = min(400, orig_pixmap.width())
+                        h = min(400, orig_pixmap.height())
+                        label.setPixmap(orig_pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                        vbox.addWidget(label)
+                        btn_close = QPushButton("Close")
+                        btn_close.clicked.connect(dialog.accept)
+                        vbox.addWidget(btn_close)
+                        dialog.setLayout(vbox)
+                        dialog.exec_()
