@@ -5,7 +5,7 @@ Combined tab for managing students and their RFID cards.
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
                            QPushButton, QLabel, QTableWidget, QTableWidgetItem, 
                            QLineEdit, QComboBox, QRadioButton, QMessageBox,
-                           QInputDialog, QSplitter, QTabWidget)
+                           QInputDialog, QSplitter, QTabWidget, QDialog)
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from gui.dialogs.student_dialogs import StudentInfoDialog
@@ -262,19 +262,24 @@ class StudentRFIDTab(QWidget):
             self.student_table.setItem(i, 1, QTableWidgetItem(class_info))
             self.student_table.setItem(i, 2, QTableWidgetItem(str(encoding_count)))
             self.student_table.setItem(i, 3, QTableWidgetItem(str(point)))
-            # Show first image if available
+            # Show single image if available, else first dataset image
+            import os
+            image_dir = self.face_system.config.get("dataset_dir", "data/dataset")
+            single_image_path = os.path.join(image_dir, person_name, f"{person_name}_single.jpg")
             image_files = self.face_system.db_manager.get_person_images(person_name)
-            if image_files:
-                from PyQt5.QtGui import QPixmap
-                from PyQt5.QtWidgets import QLabel
+            from PyQt5.QtGui import QPixmap
+            from PyQt5.QtWidgets import QLabel
+            if os.path.exists(single_image_path):
+                pixmap = QPixmap(single_image_path)
+            elif image_files:
                 pixmap = QPixmap(image_files[0])
-                if not pixmap.isNull():
-                    thumb = pixmap.scaled(64, 64, Qt.KeepAspectRatio, Qt.FastTransformation)
-                    image_label = QLabel()
-                    image_label.setPixmap(thumb)
-                    self.student_table.setCellWidget(i, 4, image_label)
-                else:
-                    self.student_table.setItem(i, 4, QTableWidgetItem("No Image"))
+            else:
+                pixmap = None
+            if pixmap and not pixmap.isNull():
+                thumb = pixmap.scaled(64, 64, Qt.KeepAspectRatio, Qt.FastTransformation)
+                image_label = QLabel()
+                image_label.setPixmap(thumb)
+                self.student_table.setCellWidget(i, 4, image_label)
             else:
                 self.student_table.setItem(i, 4, QTableWidgetItem("No Image"))
         
@@ -599,24 +604,31 @@ class StudentRFIDTab(QWidget):
                 person_item = self.student_table.item(row, 0)
                 if person_item is not None:
                     person_name = person_item.text()
+                    import os
+                    image_dir = self.face_system.config.get("dataset_dir", "data/dataset")
+                    single_image_path = os.path.join(image_dir, person_name, f"{person_name}_single.jpg")
                     image_files = self.face_system.db_manager.get_person_images(person_name)
-                    if image_files:
-                        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
-                        from PyQt5.QtCore import Qt
-                        from PyQt5.QtGui import QPixmap
+                    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+                    from PyQt5.QtCore import Qt
+                    from PyQt5.QtGui import QPixmap
+                    if os.path.exists(single_image_path):
+                        orig_pixmap = QPixmap(single_image_path)
+                    elif image_files:
                         orig_pixmap = QPixmap(image_files[0])
-                        if orig_pixmap and not orig_pixmap.isNull():
-                            dialog = QDialog(self)
-                            dialog.setWindowTitle("Zoomed Face Image")
-                            vbox = QVBoxLayout(dialog)
-                            label = QLabel()
-                            label.setAlignment(Qt.AlignCenter)
-                            w = min(400, orig_pixmap.width())
-                            h = min(400, orig_pixmap.height())
-                            label.setPixmap(orig_pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                            vbox.addWidget(label)
-                            btn_close = QPushButton("Close")
-                            btn_close.clicked.connect(dialog.accept)
-                            vbox.addWidget(btn_close)
-                            dialog.setLayout(vbox)
-                            dialog.exec_()
+                    else:
+                        orig_pixmap = None
+                    if orig_pixmap and not orig_pixmap.isNull():
+                        dialog = QDialog(self)
+                        dialog.setWindowTitle("Zoomed Face Image")
+                        vbox = QVBoxLayout(dialog)
+                        label = QLabel()
+                        label.setAlignment(Qt.AlignCenter)
+                        w = min(400, orig_pixmap.width())
+                        h = min(400, orig_pixmap.height())
+                        label.setPixmap(orig_pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                        vbox.addWidget(label)
+                        btn_close = QPushButton("Close")
+                        btn_close.clicked.connect(dialog.accept)
+                        vbox.addWidget(btn_close)
+                        dialog.setLayout(vbox)
+                        dialog.exec_()

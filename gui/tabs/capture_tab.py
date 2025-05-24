@@ -66,13 +66,16 @@ class CaptureTab(QWidget):
         self.start_button = QPushButton("Start Capture")
         self.stop_button = QPushButton("Stop Capture")
         self.stop_button.setEnabled(False)
+        self.capture_single_button = QPushButton("Capture Single Image")
         
         button_layout.addWidget(self.start_button)
         button_layout.addWidget(self.stop_button)
+        button_layout.addWidget(self.capture_single_button)
         
         # Connect buttons
         self.start_button.clicked.connect(self.start_capture)
         self.stop_button.clicked.connect(self.stop_capture)
+        self.capture_single_button.clicked.connect(self.capture_single_image)
         
         # Create status display
         self.status_label = QLabel("Enter person information and click Start Capture")
@@ -207,3 +210,44 @@ class CaptureTab(QWidget):
             self.capture_completed.emit(success, person_name)
             
             logger.info(f"Dataset capture completed for {person_name}")
+    
+    def capture_single_image(self):
+        """Capture and save a single face image for the student."""
+        import cv2
+        import os
+        person_name = self.person_name_input.text().strip()
+        class_name = self.class_name_input.text().strip()
+        if not person_name:
+            QMessageBox.warning(self, "Warning", "Person name cannot be empty.")
+            return
+        # Add class information to database
+        if class_name:
+            self.face_system.db_manager.update_student_info(person_name, {"class": class_name})
+        # Open webcam
+        cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            QMessageBox.critical(self, "Error", "Could not open webcam.")
+            return
+        self.update_status("Press SPACE to capture image, ESC to cancel.")
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                self.update_status("Failed to grab frame.")
+                break
+            # Show frame in OpenCV window
+            cv2.imshow("Capture Single Image - Press SPACE to capture", frame)
+            key = cv2.waitKey(1)
+            if key == 27:  # ESC
+                self.update_status("Single image capture cancelled.")
+                break
+            elif key == 32:  # SPACE
+                # Save image
+                save_dir = os.path.join(self.face_system.config.get("dataset_dir", "data/dataset"), person_name)
+                os.makedirs(save_dir, exist_ok=True)
+                img_path = os.path.join(save_dir, f"{person_name}_single.jpg")
+                cv2.imwrite(img_path, frame)
+                self.update_status(f"Single image saved for {person_name}.")
+                QMessageBox.information(self, "Success", f"Single face image saved for {person_name}.")
+                break
+        cap.release()
+        cv2.destroyAllWindows()
