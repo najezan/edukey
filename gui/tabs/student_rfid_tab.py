@@ -181,6 +181,12 @@ class StudentRFIDTab(QWidget):
     #
     def update_student_info(self):
         """Update student information."""
+        selected_item = self.student_table.selectedItems()
+
+        if not selected_item:
+            QMessageBox.warning(self, "Warning", "Please select a")
+
+
         if not self.face_system.trained_people:
             QMessageBox.warning(self, "Warning", "No people in the trained model yet.")
             return

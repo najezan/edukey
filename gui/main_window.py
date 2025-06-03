@@ -1,11 +1,7 @@
-"""
-Modified main GUI window to use combined Student & RFID tab.
-"""
-
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget, QLabel, QMessageBox, QCheckBox
-from PyQt5.QtCore import Qt
 
 from utils.logger import logger
+
 from gui.tabs.recognition_tab import RecognitionTab
 from gui.tabs.capture_tab import CaptureTab
 from gui.tabs.training_tab import TrainingTab
@@ -13,9 +9,9 @@ from gui.tabs.student_rfid_tab import StudentRFIDTab
 from gui.tabs.anti_spoofing_tab import AntiSpoofingTab
 from gui.tabs.settings_tab import SettingsTab
 from gui.tabs.attendance_tab import AttendanceTab
-from gui.dialogs.card_dialogs import NewCardDialog, ExistingCardDialog
-from threads.rfid_thread import RFIDServerThread
 from gui.tabs.asset_management_tab import AssetManagementTab
+
+from threads.rfid_thread import RFIDServerThread
 
 class FaceRecognitionGUI(QMainWindow):
     """
@@ -36,13 +32,13 @@ class FaceRecognitionGUI(QMainWindow):
         self.face_system = face_system
         
         # RFID mode settings
-        self.rfid_mode = "identify"  # Default mode: "identify" or "add_edit"
+        self.rfid_mode = "identify"
         
         # Create RFID server thread
         self.rfid_server = RFIDServerThread(face_system)
         
         # Set up the main window
-        self.setWindowTitle("Face Recognition System with RFID and Anti-Spoofing")
+        self.setWindowTitle("--- Edukey Control Panel---")
         self.setMinimumSize(1200, 800)
         
         # Create central widget and main layout
@@ -72,7 +68,7 @@ class FaceRecognitionGUI(QMainWindow):
         self.tabs.addTab(self.attendance_tab, "Attendance")
         self.tabs.addTab(self.settings_tab, "Settings")
         
-        # Now connect RFID server signals (after self.student_rfid_tab is created)
+        # Connect RFID server signals to tabs
         self.rfid_server.rfid_detected.connect(self.student_rfid_tab.handle_rfid_detection)
         self.rfid_server.rfid_detected.connect(self.asset_management_tab.handle_rfid_detected)
         self.rfid_server.update_status.connect(self.update_rfid_status)

@@ -8,30 +8,40 @@ import sys
 import os
 from PyQt5.QtWidgets import QApplication
 
-# Memastikan direktori saat ini ada di PYTHONPATH
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from core.face_recognition import FaceRecognitionSystem
+from core.legacy_adapter import FaceRecognitionSystemAdapter
 from gui.main_window import FaceRecognitionGUI
 from utils.logger import logger
 
 def main():
     """
-    Fungsi utama untuk menjalankan aplikasi.
+    Main function to initialize and run the Face Recognition System.
+    Uses the new refactored architecture with backward compatibility.
     """
-    # Setup logger
-    logger.info("Starting Face Recognition System")
+
+    # Initialize logger
+    logger.info("Starting Face Recognition System (Refactored Architecture)")
     
-    # Create application
+    # Create application instance
     app = QApplication(sys.argv)
-    app.setStyle('Fusion')  # Use Fusion style for a modern look
+    app.setStyle('Fusion')
+
+    # Initialize face recognition system using the new refactored architecture
+    # The adapter provides complete backward compatibility with existing GUI code
+    face_system = FaceRecognitionSystemAdapter()
     
-    # Create face recognition system
-    face_system = FaceRecognitionSystem()
+    # Log system information
+    stats = face_system.orchestrator.get_system_stats()
+    logger.info(f"System initialized with {stats['recognition']['total_known_faces']} known faces")
+    logger.info(f"CUDA available: {stats['performance']['cuda_available']}")
+    logger.info(f"Detection method: {stats['performance']['detection_method']}")
     
-    # Create and show GUI
+    # Initialize GUI (unchanged - uses adapter for compatibility)
     gui = FaceRecognitionGUI(face_system)
     gui.show()
+    
+    logger.info("GUI initialized and displayed")
     
     # Run application
     sys.exit(app.exec_())

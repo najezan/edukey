@@ -15,10 +15,11 @@ import time
 from typing import Tuple, List, Dict, Any, Optional
 from ultralytics import YOLO
 
+from core.interfaces.anti_spoofing_interface import IAntiSpoofingService
 from utils.logger import logger
 from utils.config import Config
 
-class AntiSpoofingSystem:
+class AntiSpoofingSystem(IAntiSpoofingService):
     """
     Anti-spoofing system using YOLO for detecting presentation attacks.
     
@@ -106,7 +107,7 @@ class AntiSpoofingSystem:
             if "No module named 'ultralytics'" in str(e):
                 logger.error("Please install ultralytics: pip install ultralytics")
     
-    def is_real_face(self, frame: np.ndarray) -> Tuple[bool, float, Optional[Dict[str, Any]]]:
+    def is_real_face(self, face_image: np.ndarray) -> Tuple[bool, float, Optional[Dict[str, Any]]]:
         """
         Determine if a face is real or a spoofing attempt.
         
@@ -137,7 +138,7 @@ class AntiSpoofingSystem:
         
         try:
             # Detect faces using YOLOv8
-            yolo_results = self.yolo_model(frame, verbose=False)
+            yolo_results = self.yolo_model(face_image, verbose=False)
             
             # If no face detected, return indeterminate result
             if len(yolo_results[0].boxes) == 0:
@@ -156,7 +157,7 @@ class AntiSpoofingSystem:
             # Extract face region with margin
             x1, y1, x2, y2 = map(int, box)
             # Add margin (10% on each side)
-            height, width = frame.shape[:2]
+            height, width = face_image.shape[:2]
             margin_x = int((x2 - x1) * 0.1)
             margin_y = int((y2 - y1) * 0.1)
             x1 = max(0, x1 - margin_x)
@@ -164,7 +165,7 @@ class AntiSpoofingSystem:
             x2 = min(width, x2 + margin_x)
             y2 = min(height, y2 + margin_y)
             
-            face_img = frame[y1:y2, x1:x2]
+            face_img = face_image[y1:y2, x1:x2]
             
             # Run anti-spoofing model on the face region
             spoofing_results = self.spoofing_model(face_img, verbose=False)
@@ -276,7 +277,7 @@ class AntiSpoofingSystem:
             logger.error(f"Error in liveness detection: {e}")
             return True, 0.5, {"error": str(e)}
     
-    def detect_abnormal_face_structure(self, face_img: np.ndarray) -> Tuple[bool, Dict[str, Any]]:
+    def detect_abnormal_face_structure(self, face_image: np.ndarray) -> Tuple[bool, Dict[str, Any]]:
         """
         Detect abnormal face structures that may indicate masks or deep fakes.
         
@@ -288,7 +289,7 @@ class AntiSpoofingSystem:
         """
         try:
             # Convert to grayscale
-            gray = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(face_image, cv2.COLOR_BGR2GRAY)
             
             # Apply face landmark detection
             # This would use a face landmark detector

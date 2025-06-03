@@ -9,7 +9,7 @@
     "enable_anti_spoofing": false,
     "spoofing_detection_threshold": 1.0,
     "attendance_min_confidence": 70,
-    "attendance_late_cutoff": "13:00",
+    "attendance_late_cutoff": "07:00",
     "attendance_cooldown": 1,
     "default_num_images": 250,
     "mysql_enabled": false,
